@@ -5,7 +5,7 @@
 (function () {
   // The OAuth Client ID from Google Cloud (APIs & Services > Credentials). It is not a secret.
   // Shown in the menu, so it's easy to tell whether a phone has the latest update
-  var VERSION = '9';
+  var VERSION = '10';
   var CLIENT_ID = '781490508547-lg8vamkljt03bjnho0up53u4ma08mo75.apps.googleusercontent.com';
   var APP_URL = 'https://rachelcol.github.io/Google-Task-App/';
   var SCOPES = 'https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/drive.appdata';
@@ -724,16 +724,6 @@
     var id = threadId(t.email.link);
     return IOS && id ? 'https://mail.google.com/mail/mu/mp/#cv/priority/%5Esmartlabel_personal/' + encodeURIComponent(id) : t.email.link;
   }
-  // A few more Gmail app links to try, to see if any opens the email inside the app
-  function iosEmailTry(t) {
-    var id = encodeURIComponent(threadId(t.email.link));
-    if (!id || (!IOS && !/[?&]trial=1/.test(location.search))) return '';
-    return '<div class="email-try"><span class="menu-note">More Gmail app tests:</span>' +
-      '<a class="btn" href="googlegmail:///cv=' + id + '/accountId=0">A</a>' +
-      '<a class="btn" href="googlegmail:///cv=' + id + '">B</a>' +
-      '<a class="btn" href="googlegmail://thread?id=' + id + '">C</a>' +
-      '<a class="btn" href="googlegmail:///cv=' + id + '/accountId=2&create-new-tab">D</a></div>';
-  }
   function openTaskSheet(t) {
     var base = fields(t);
     var lists = state.lists.map(function (l) { return '<option value="' + l.id + '"' + (l.id === t.listId ? ' selected' : '') + '>' + esc(l.title) + '</option>'; }).join('');
@@ -742,12 +732,14 @@
     }).join('');
     var s = sheet(
       '<div class="field"><label for="t-title">Task</label><input id="t-title" class="title-input" value="' + esc(t.title) + '"></div>' +
-      (t.email ? '<div class="email-box"><div class="who"><div class="subj">' + esc(t.email.subject) + '</div><div class="from">Added from Gmail</div></div><a class="btn" data-act="email" href="' + esc(emailHref(t)) + '" target="_blank" rel="noopener">' + ICON.mail + 'Open email</a>' + iosEmailTry(t) + '</div>' : '') +
+      (t.email ? '<div class="email-box"><div class="who"><div class="subj">' + esc(t.email.subject) + '</div><div class="from">Added from Gmail</div></div><div class="email-links"><a class="btn" data-act="email" href="' + esc(emailHref(t)) + '" target="_blank" rel="noopener">' + ICON.mail + 'Open email</a>' +
+        // Google's own Tasks app can open the email inside the Gmail app, so offer it as a second way
+        (t.web ? '<a class="btn" href="' + esc(t.web) + '" target="_blank" rel="noopener">' + ICON.ext + 'Open Google Task</a>' : '') + '</div></div>' : '') +
       '<div class="field"><span class="lbl">Priority</span><div class="seg">' + pri + '</div></div>' +
       '<div class="two"><div class="field"><label for="t-due">Due date</label><input id="t-due" type="date" value="' + esc(t.due) + '"></div>' +
       '<div class="field"><label for="t-list">List</label><select id="t-list">' + lists + '</select></div></div>' +
       '<div class="field"><label for="t-notes">Notes</label><textarea id="t-notes" placeholder="Add details">' + esc(t.notes) + '</textarea></div>' +
-      (t.web ? '<a class="gt-link" href="' + esc(t.web) + '" target="_blank" rel="noopener">Open in Google Tasks</a>' : '') +
+      (t.web && !t.email ? '<a class="gt-link" href="' + esc(t.web) + '" target="_blank" rel="noopener">Open in Google Tasks</a>' : '') +
       '<div class="confirm-slot"></div>' +
       '<div class="sheet-actions"><button type="button" class="btn danger" data-act="delete">Delete</button>' +
       '<div class="right"><button type="button" class="btn" data-act="toggle">' + (t.done ? 'Mark not done' : 'Mark done') + '</button><button type="button" class="btn primary" data-act="close">Save</button></div></div>',

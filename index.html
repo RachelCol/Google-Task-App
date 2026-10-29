@@ -153,8 +153,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .email-box { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .email-box .who { min-width: 0; flex: 1 1 180px; }
 .email-box .subj { font-weight: 600; overflow-wrap: anywhere; }
-.email-try { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.email-try .link-text { flex-basis: 100%; font-size: 12px; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+.email-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .email-box .from { font-size: 13px; color: var(--muted); }
 .sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
 .sheet-actions .right { display: flex; gap: 8px; margin-left: auto; }
@@ -326,6 +325,6 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
 <main class="board" id="board" aria-label="Tasks"></main>
 <div id="layer"></div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
