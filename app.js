@@ -439,7 +439,7 @@
     if (mode !== 'list' && l) meta += '<span class="list-tag" style="color:var(--' + l.color + ')">' + esc(l.title) + '</span>';
     if (di && mode !== 'cal') meta += '<span class="due ' + (t.done ? '' : di.cls) + '">' + ICON.cal + esc(di.label) + '</span>';
     if (t.notes && mode !== 'cal') meta += '<span class="notes-mark" title="Has notes">' + ICON.notes + '</span>';
-    if (t.email) meta += '<a class="email" data-act="email" href="' + esc(t.email.link) + '" target="_blank" rel="noopener" title="Open email in Gmail">' + ICON.mail + (mode === 'cal' ? '' : '<span class="email-from">Open email</span>') + '</a>';
+    if (t.email) meta += '<a class="email" data-act="email" href="' + esc(emailHref(t)) + '" target="_blank" rel="noopener" title="Open email in Gmail">' + ICON.mail + (mode === 'cal' ? '' : '<span class="email-from">Open email</span>') + '</a>';
     return '<div class="card' + (t.done ? ' done' : '') + '" data-id="' + t.id + '" data-p="' + (t.priority || '') + '" tabindex="0" role="button" aria-label="' + esc(t.title) + '">' +
       '<button type="button" class="check" data-act="toggle" aria-label="' + (t.done ? 'Mark not done' : 'Mark done') + '">' + ICON.check + '</button>' +
       '<div class="title">' + esc(t.title || 'Untitled task') + '</div>' +
@@ -712,21 +712,25 @@
     return scrim.querySelector('.sheet');
   }
 
-  // iPhone: Gmail's web link only reaches the inbox there, so offer the Gmail app and the mobile site straight to the thread.
-  // Trial buttons for now, to find which one opens the email on Rachel's phone.
+  // iPhone: Gmail's own link only reaches the inbox there, but the mobile Gmail site can open the thread itself
   var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   function threadId(link) {
     var m = String(link || '').match(/[?&]th=([^&#]+)/) || String(link || '').match(/#[^?]*\/([^/?]+)\/?$/);
     return m ? decodeURIComponent(m[1]) : '';
   }
-  function iosEmailTry(t) {
+  function emailHref(t) {
     var id = threadId(t.email.link);
-    if (!IOS && !/[?&]trial=1/.test(location.search)) return '';
-    return '<div class="email-try"><span class="menu-note">Trying out ways to open this on iPhone:</span>' +
-      (id ? '<a class="btn" href="googlegmail:///cv=' + encodeURIComponent(id) + '/accountId=1&create-new-tab">1. Gmail app</a>' +
-        '<a class="btn" href="https://mail.google.com/mail/mu/mp/#cv/priority/%5Esmartlabel_personal/' + encodeURIComponent(id) + '" target="_blank" rel="noopener">2. Gmail website</a>' +
-        '<a class="btn" href="googlegmail://">3. Just open Gmail</a>' : '') +
-      '<span class="menu-note link-text">' + esc(t.email.link) + '</span></div>';
+    return IOS && id ? 'https://mail.google.com/mail/mu/mp/#cv/priority/%5Esmartlabel_personal/' + encodeURIComponent(id) : t.email.link;
+  }
+  // A few more Gmail app links to try, to see if any opens the email inside the app
+  function iosEmailTry(t) {
+    var id = encodeURIComponent(threadId(t.email.link));
+    if (!id || (!IOS && !/[?&]trial=1/.test(location.search))) return '';
+    return '<div class="email-try"><span class="menu-note">More Gmail app tests:</span>' +
+      '<a class="btn" href="googlegmail:///cv=' + id + '/accountId=0">A</a>' +
+      '<a class="btn" href="googlegmail:///cv=' + id + '">B</a>' +
+      '<a class="btn" href="googlegmail://thread?id=' + id + '">C</a>' +
+      '<a class="btn" href="googlegmail:///cv=' + id + '/accountId=2&create-new-tab">D</a></div>';
   }
   function openTaskSheet(t) {
     var base = fields(t);
@@ -736,7 +740,7 @@
     }).join('');
     var s = sheet(
       '<div class="field"><label for="t-title">Task</label><input id="t-title" class="title-input" value="' + esc(t.title) + '"></div>' +
-      (t.email ? '<div class="email-box"><div class="who"><div class="subj">' + esc(t.email.subject) + '</div><div class="from">Added from Gmail</div></div><a class="btn" data-act="email" href="' + esc(t.email.link) + '" target="_blank" rel="noopener">' + ICON.mail + 'Open email</a>' + iosEmailTry(t) + '</div>' : '') +
+      (t.email ? '<div class="email-box"><div class="who"><div class="subj">' + esc(t.email.subject) + '</div><div class="from">Added from Gmail</div></div><a class="btn" data-act="email" href="' + esc(emailHref(t)) + '" target="_blank" rel="noopener">' + ICON.mail + 'Open email</a>' + iosEmailTry(t) + '</div>' : '') +
       '<div class="field"><span class="lbl">Priority</span><div class="seg">' + pri + '</div></div>' +
       '<div class="two"><div class="field"><label for="t-due">Due date</label><input id="t-due" type="date" value="' + esc(t.due) + '"></div>' +
       '<div class="field"><label for="t-list">List</label><select id="t-list">' + lists + '</select></div></div>' +
@@ -744,7 +748,7 @@
       (t.web ? '<a class="gt-link" href="' + esc(t.web) + '" target="_blank" rel="noopener">Open in Google Tasks</a>' : '') +
       '<div class="confirm-slot"></div>' +
       '<div class="sheet-actions"><button type="button" class="btn danger" data-act="delete">Delete</button>' +
-      '<div class="right"><button type="button" class="btn" data-act="toggle">' + (t.done ? 'Mark not done' : 'Mark done') + '</button><button type="button" class="btn primary" data-act="close">Done</button></div></div>',
+      '<div class="right"><button type="button" class="btn" data-act="toggle">' + (t.done ? 'Mark not done' : 'Mark done') + '</button><button type="button" class="btn primary" data-act="close">Save</button></div></div>',
       function () {
         if (!state.tasks.includes(t)) return;
         if (changed(t, base)) { commit(t, base); save(); }
