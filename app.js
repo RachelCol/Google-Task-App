@@ -256,6 +256,8 @@
       } catch (e) {
         if (e.auth) { pumping = false; return needAuth(); }
         if (e.offline) { pumping = false; syncUi(); clearTimeout(retryTimer); retryTimer = setTimeout(pump, 8000); return; }
+        // If Google won't place it after the task above, send it again without a place (the board sorts it anyway)
+        if (op.plain && op.u !== op.plain) { op.u = op.plain; persistQueue(); continue; }
         queue.shift(); persistQueue();
         toast((op.what ? 'Google didn’t accept that change (' + op.what + '): ' : 'Google didn’t accept that change: ') + (e.message || 'error'));
         refreshAfterQueue = true;
@@ -279,10 +281,10 @@
   }
 
   function fields(t) { return { listId: t.listId, title: t.title, notes: t.notes, priority: t.priority, due: t.due, done: t.done, prev: prevSibling(t) }; }
-  // The task just above this one in its list (Google places tasks after a "previous" task)
+  // The open task just above this one in its list (Google places tasks after a "previous" task, which can't be a checked-off one)
   function prevSibling(t) {
     var i = state.tasks.indexOf(t);
-    for (var j = i - 1; j >= 0; j--) { var x = state.tasks[j]; if (x.listId === t.listId && !x.parent) return x.id; }
+    for (var j = i - 1; j >= 0; j--) { var x = state.tasks[j]; if (x.listId === t.listId && !x.parent && !x.done) return x.id; }
     return null;
   }
   function moveQuery(t, toList) {
@@ -311,7 +313,7 @@
   function insertTask(t) {
     t.id = 'tmp_' + uid();
     var p = prevSibling(t);
-    enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks' + (p ? '?previous=' + p : ''), b: toGoogle(t), tmp: t.id, what: 'adding “' + t.title + '”' });
+    enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks' + (p ? '?previous=' + p : ''), plain: '/lists/' + t.listId + '/tasks', b: toGoogle(t), tmp: t.id, what: 'adding “' + t.title + '”' });
   }
   function deleteTask(t) {
     var i = state.tasks.indexOf(t), copy = Object.assign({}, t);
