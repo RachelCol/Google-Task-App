@@ -284,7 +284,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 [hidden] { display: none !important; }
 /* Sign-in and loading screens, sync status, and the menu */
 .top { position: relative; }
-@media (max-width: 600px) { #menuBtn { position: absolute; top: 14px; right: max(16px, env(safe-area-inset-right, 0px)); } .brand { padding-right: 52px; } }
+#ver { align-self: center; font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) { #ver { position: absolute; top: 25px; right: calc(max(16px, env(safe-area-inset-right, 0px)) + 52px); } }
+@media (max-width: 600px) { #menuBtn { position: absolute; top: 14px; right: max(16px, env(safe-area-inset-right, 0px)); } .brand { padding-right: 96px; } }
 .board.gate { display: block; overflow: visible; }
 .welcome { margin: 32px auto; max-width: 460px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
 .welcome h2 { font-family: var(--f-display); font-size: 22px; margin: 0; }
@@ -314,6 +316,7 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
       <button type="button" data-view="priority"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Priority</button>
       <button type="button" data-view="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Calendar</button>
     </div>
+    <span class="ver" id="ver" title="App version"></span>
     <button class="btn" id="menuBtn" type="button" aria-label="Menu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       <span class="lbl-long">Menu</span>
@@ -325,6 +328,6 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
 <main class="board" id="board" aria-label="Tasks"></main>
 <div id="layer"></div>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

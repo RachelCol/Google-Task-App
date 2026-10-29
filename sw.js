@@ -1,6 +1,6 @@
 // Keeps a copy of the app's own files so the board opens even with a weak connection.
 // Always tries the network first, so updates show up right away. Google's data is never cached here.
-var CACHE = 'task-board-v11';
+var CACHE = 'task-board-v12';
 var FILES = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {
@@ -13,7 +13,7 @@ self.addEventListener('activate', function (e) {
 });
 self.addEventListener('fetch', function (e) {
   var url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  if (e.request.method !== 'GET' || url.origin !== location.origin || /version\.txt$/.test(url.pathname)) return;
   // no-cache: always ask GitHub for the newest copy instead of an older one the browser kept
   e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(function (r) {
     if (r.ok) { var copy = r.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }
