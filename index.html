@@ -110,7 +110,7 @@ button { cursor: pointer; }
 .due { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; }
 .due.overdue, .due.today { color: var(--p-high); font-weight: 600; }
 .due svg, .notes-mark svg { width: 13px; height: 13px; }
-.email { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; background: var(--surface); font-size: 12.5px; font-weight: 500; color: var(--fg); max-width: 100%; }
+.email { text-decoration: none; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; background: var(--surface); font-size: 12.5px; font-weight: 500; color: var(--fg); max-width: 100%; }
 .email:hover { border-color: var(--accent); color: var(--accent); }
 .email svg { width: 14px; height: 14px; flex: none; }
 .email-from { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
@@ -324,6 +324,6 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
 <main class="board" id="board" aria-label="Tasks"></main>
 <div id="layer"></div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

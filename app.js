@@ -439,7 +439,7 @@
     if (mode !== 'list' && l) meta += '<span class="list-tag" style="color:var(--' + l.color + ')">' + esc(l.title) + '</span>';
     if (di && mode !== 'cal') meta += '<span class="due ' + (t.done ? '' : di.cls) + '">' + ICON.cal + esc(di.label) + '</span>';
     if (t.notes && mode !== 'cal') meta += '<span class="notes-mark" title="Has notes">' + ICON.notes + '</span>';
-    if (t.email) meta += '<button type="button" class="email" data-act="email" title="Open email in Gmail">' + ICON.mail + (mode === 'cal' ? '' : '<span class="email-from">Open email</span>') + '</button>';
+    if (t.email) meta += '<a class="email" data-act="email" href="' + esc(t.email.link) + '" target="_blank" rel="noopener" title="Open email in Gmail">' + ICON.mail + (mode === 'cal' ? '' : '<span class="email-from">Open email</span>') + '</a>';
     return '<div class="card' + (t.done ? ' done' : '') + '" data-id="' + t.id + '" data-p="' + (t.priority || '') + '" tabindex="0" role="button" aria-label="' + esc(t.title) + '">' +
       '<button type="button" class="check" data-act="toggle" aria-label="' + (t.done ? 'Mark not done' : 'Mark done') + '">' + ICON.check + '</button>' +
       '<div class="title">' + esc(t.title || 'Untitled task') + '</div>' +
@@ -634,7 +634,6 @@
     commit(t, before);
     save(); render();
   }
-  function openEmail(t) { if (t.email && t.email.link) window.open(t.email.link, '_blank', 'noopener'); }
 
   document.querySelectorAll('[data-view]').forEach(function (b) {
     b.onclick = function () { state.view = b.dataset.view; addingIn = null; save(); board.scrollLeft = 0; render(); };
@@ -653,7 +652,7 @@
     if (act === 'retry') { phase = 'loading'; render(); return refresh(); }
     if (act === 'toggle' && t) return toggleTask(t);
     if (act === 'cycle' && t) return cycle(t);
-    if (act === 'email' && t) return openEmail(t);
+    if (act === 'email') return;
     if (act === 'add') return openNewTaskSheet(zkey);
     if (act === 'toggle-done') { openDone[listId] = !openDone[listId]; return render(); }
     if (act === 'listmenu') return openListSheet(listById(listId));
@@ -721,7 +720,7 @@
     }).join('');
     var s = sheet(
       '<div class="field"><label for="t-title">Task</label><input id="t-title" class="title-input" value="' + esc(t.title) + '"></div>' +
-      (t.email ? '<div class="email-box"><div class="who"><div class="subj">' + esc(t.email.subject) + '</div><div class="from">Added from Gmail</div></div><button type="button" class="btn" data-act="email">' + ICON.mail + 'Open email</button></div>' : '') +
+      (t.email ? '<div class="email-box"><div class="who"><div class="subj">' + esc(t.email.subject) + '</div><div class="from">Added from Gmail</div></div><a class="btn" data-act="email" href="' + esc(t.email.link) + '" target="_blank" rel="noopener">' + ICON.mail + 'Open email</a></div>' : '') +
       '<div class="field"><span class="lbl">Priority</span><div class="seg">' + pri + '</div></div>' +
       '<div class="two"><div class="field"><label for="t-due">Due date</label><input id="t-due" type="date" value="' + esc(t.due) + '"></div>' +
       '<div class="field"><label for="t-list">List</label><select id="t-list">' + lists + '</select></div></div>' +
@@ -747,8 +746,7 @@
       if (b.dataset.pri !== undefined) {
         t.priority = b.dataset.pri || null;
         s.querySelectorAll('[data-pri]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
-      } else if (b.dataset.act === 'email') openEmail(t);
-      else if (b.dataset.act === 'close') closeSheet();
+      } else if (b.dataset.act === 'close') closeSheet();
       else if (b.dataset.act === 'toggle') { closeSheet(); toggleTask(t); }
       else if (b.dataset.act === 'delete') {
         s.querySelector('.confirm-slot').innerHTML = '<div class="confirm">Delete this task?<span style="flex:1"></span><button type="button" class="btn danger" data-act="really-delete">Delete</button><button type="button" class="btn" data-act="keep">Keep it</button></div>';
