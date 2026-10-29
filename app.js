@@ -5,7 +5,7 @@
 (function () {
   // The OAuth Client ID from Google Cloud (APIs & Services > Credentials). It is not a secret.
   // Shown in the menu, so it's easy to tell whether a phone has the latest update
-  var VERSION = '10';
+  var VERSION = '11';
   var CLIENT_ID = '781490508547-lg8vamkljt03bjnho0up53u4ma08mo75.apps.googleusercontent.com';
   var APP_URL = 'https://rachelcol.github.io/Google-Task-App/';
   var SCOPES = 'https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/drive.appdata';
@@ -739,7 +739,7 @@
       '<div class="two"><div class="field"><label for="t-due">Due date</label><input id="t-due" type="date" value="' + esc(t.due) + '"></div>' +
       '<div class="field"><label for="t-list">List</label><select id="t-list">' + lists + '</select></div></div>' +
       '<div class="field"><label for="t-notes">Notes</label><textarea id="t-notes" placeholder="Add details">' + esc(t.notes) + '</textarea></div>' +
-      (t.web && !t.email ? '<a class="gt-link" href="' + esc(t.web) + '" target="_blank" rel="noopener">Open in Google Tasks</a>' : '') +
+      (t.web ? '<a class="gt-link" href="' + esc(t.web) + '" target="_blank" rel="noopener">Open in Google Tasks</a>' : '') +
       '<div class="confirm-slot"></div>' +
       '<div class="sheet-actions"><button type="button" class="btn danger" data-act="delete">Delete</button>' +
       '<div class="right"><button type="button" class="btn" data-act="toggle">' + (t.done ? 'Mark not done' : 'Mark done') + '</button><button type="button" class="btn primary" data-act="close">Save</button></div></div>',
