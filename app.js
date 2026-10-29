@@ -22,7 +22,7 @@
   var PRI_TAG = { high: 1, med: 2, low: 3 };
   var PRI_COLS = [['none', 'No priority', 'slate'], ['high', 'High', 'rose'], ['med', 'Medium', 'yellow'], ['low', 'Low', 'green']];
   var NOTES = {
-    lists: 'Each list is sorted by due date, overdue first. Drag cards between lists (on a phone, press and hold a card first). Tap a card to edit it, or a list’s <strong>&middot;&middot;&middot;</strong> button to change how it looks.',
+    lists: 'Each list is sorted by priority, High first, and then by due date, overdue first. Drag cards between lists (on a phone, press and hold a card first). Tap a card to edit it, or a list’s <strong>&middot;&middot;&middot;</strong> button to change how it looks.',
     priority: '<strong>Priority view.</strong> Each column is sorted by due date, overdue first. Drag a card to another column to change its priority, or drag it off the columns to clear it. “No priority” only appears when something needs sorting.',
     calendar: '<strong>Calendar view.</strong> Each day is sorted by priority, High first. Drag a card to another day to change its due date, or to “No due date” to clear it. Overdue tasks and tasks with no due date stay at the top in both Week and Month.'
   };
@@ -414,9 +414,18 @@
       return ra - rb || a.i - b.i;
     }).map(function (x) { return x.t; });
   }
+  // Lists view: High, Medium, Low, then no priority; within each, earliest due date first (overdue first), undated last
+  function byPriorityThenDue(arr) {
+    return arr.map(function (t, i) { return { t: t, i: i }; }).sort(function (a, b) {
+      var ra = a.t.priority ? PRI_RANK[a.t.priority] : 3, rb = b.t.priority ? PRI_RANK[b.t.priority] : 3;
+      if (ra !== rb) return ra - rb;
+      var da = a.t.due || '9999-99-99', db = b.t.due || '9999-99-99';
+      return da < db ? -1 : da > db ? 1 : a.i - b.i;
+    }).map(function (x) { return x.t; });
+  }
   function openTasks(listId) {
     var arr = state.tasks.filter(function (t) { return t.listId === listId && !t.done; });
-    return state.sortByPriority ? byPriority(arr) : byDue(arr);
+    return byPriorityThenDue(arr);
   }
 
   // mode: 'list' (priority chip), 'pri' (list name), 'cal' (priority + list, no date), 'over' (all)
@@ -577,9 +586,6 @@
     board.scrollLeft = sl;
     document.getElementById('note').innerHTML = NOTES[v];
     document.querySelectorAll('[data-view]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.view === v)); });
-    var sb = document.getElementById('sortBtn');
-    sb.hidden = v !== 'lists';
-    sb.setAttribute('aria-pressed', String(!!state.sortByPriority));
     focusAdd = false;
     syncUi();
   }
@@ -679,7 +685,6 @@
     if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('card')) { e.preventDefault(); var t = taskById(e.target.dataset.id); if (t) openTaskSheet(t); }
   });
 
-  document.getElementById('sortBtn').onclick = function () { state.sortByPriority = !state.sortByPriority; save(); render(); };
   document.getElementById('menuBtn').onclick = openMenu;
 
   /* ---------- Pop-up sheets ---------- */

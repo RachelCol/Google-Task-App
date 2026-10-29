@@ -22,7 +22,7 @@
 :root {
   --bg: #E8ECF3; --surface: #F6F8FB; --card: #FFFFFF; --fg: #1B2233; --muted: #5D6880;
   --line: #D3D9E4; --accent: #3346C9; --accent-fg: #FFFFFF; --shadow: rgba(27,34,51,.10);
-  --p-high: #C8432B; --p-med: #E3B505; --p-med-bg: #FFF3BF; --p-med-ink: #8A6F00; --p-low: #2F8466; --danger: #B3362A;
+  --p-high: #C8432B; --p-med: #E3B505; --p-med-bg: #FFF3BF; --p-med-ink: #8A6F00; --p-low: #2F8466; --p-high-bg: #FCE6E1; --p-low-bg: #DFF1E9; --danger: #B3362A;
   --slate: #5D6880; --slate-t: #E3E8F0; --blue: #3346C9; --blue-t: #DFE5FA;
   --green: #2F7F62; --green-t: #DCEFE7; --amber: #A86F0A; --amber-t: #F6ECD6;
   --rose: #B83A63; --rose-t: #F7E0E8; --violet: #6E42BC; --violet-t: #EBE3F8;
@@ -33,7 +33,7 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #11151E; --surface: #1A202C; --card: #252C3A; --fg: #E6EAF2; --muted: #9AA4BA;
   --line: #333B4C; --accent: #93A1FF; --accent-fg: #11151E; --shadow: rgba(0,0,0,.35);
-  --p-high: #F07A62; --p-med: #F5CF3A; --p-med-bg: #3A3110; --p-med-ink: #F5CF3A; --p-low: #5CC29C; --danger: #F07A62;
+  --p-high: #F07A62; --p-med: #F5CF3A; --p-med-bg: #3A3110; --p-med-ink: #F5CF3A; --p-low: #5CC29C; --p-high-bg: #3B1D18; --p-low-bg: #15302A; --danger: #F07A62;
   --slate: #9AA4BA; --slate-t: #1C222D; --blue: #93A1FF; --blue-t: #1D2340;
   --green: #5CC29C; --green-t: #162C26; --amber: #E8B44C; --amber-t: #2E2617;
   --rose: #F07AA0; --rose-t: #331B26; --violet: #B694FF; --violet-t: #261F3B;
@@ -42,7 +42,7 @@
 :root[data-theme="dark"] {
   --bg: #11151E; --surface: #1A202C; --card: #252C3A; --fg: #E6EAF2; --muted: #9AA4BA;
   --line: #333B4C; --accent: #93A1FF; --accent-fg: #11151E; --shadow: rgba(0,0,0,.35);
-  --p-high: #F07A62; --p-med: #F5CF3A; --p-med-bg: #3A3110; --p-med-ink: #F5CF3A; --p-low: #5CC29C; --danger: #F07A62;
+  --p-high: #F07A62; --p-med: #F5CF3A; --p-med-bg: #3A3110; --p-med-ink: #F5CF3A; --p-low: #5CC29C; --p-high-bg: #3B1D18; --p-low-bg: #15302A; --danger: #F07A62;
   --slate: #9AA4BA; --slate-t: #1C222D; --blue: #93A1FF; --blue-t: #1D2340;
   --green: #5CC29C; --green-t: #162C26; --amber: #E8B44C; --amber-t: #2E2617;
   --rose: #F07AA0; --rose-t: #331B26; --violet: #B694FF; --violet-t: #261F3B;
@@ -103,7 +103,7 @@ button { cursor: pointer; }
 .meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); min-width: 0; }
 .column.compact .meta .email-from, .column.compact .notes-mark { display: none; }
 .chip { border: 1px solid currentColor; border-radius: 99px; padding: 1px 8px; font-size: 12px; font-weight: 600; background: transparent; line-height: 1.5; }
-.chip.high { color: var(--p-high); } .chip.med { color: var(--p-med-ink); background: var(--p-med-bg); border-color: var(--p-med); } .chip.low { color: var(--p-low); }
+.chip.high { color: var(--p-high); background: var(--p-high-bg); } .chip.med { color: var(--p-med-ink); background: var(--p-med-bg); border-color: var(--p-med); } .chip.low { color: var(--p-low); background: var(--p-low-bg); }
 .chip.none { color: var(--muted); border-style: dashed; font-weight: 500; opacity: 0; }
 .card:hover .chip.none, .chip.none:focus-visible { opacity: 1; }
 @media (hover: none) { .chip.none { display: none; } }
@@ -310,10 +310,6 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
       <button type="button" data-view="priority"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Priority</button>
       <button type="button" data-view="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Calendar</button>
     </div>
-    <button class="btn" id="sortBtn" aria-pressed="false" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
-      <span>Sort<span class="lbl-long"> by priority</span></span>
-    </button>
     <button class="btn" id="menuBtn" type="button" aria-label="Menu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       <span class="lbl-long">Menu</span>
@@ -325,6 +321,6 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
 <main class="board" id="board" aria-label="Tasks"></main>
 <div id="layer"></div>
 
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
