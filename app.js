@@ -4,6 +4,8 @@
    app's private Google Drive folder, so they follow you between phone and computer. */
 (function () {
   // The OAuth Client ID from Google Cloud (APIs & Services > Credentials). It is not a secret.
+  // Shown in the menu, so it's easy to tell whether a phone has the latest update
+  var VERSION = '9';
   var CLIENT_ID = '781490508547-lg8vamkljt03bjnho0up53u4ma08mo75.apps.googleusercontent.com';
   var APP_URL = 'https://rachelcol.github.io/Google-Task-App/';
   var SCOPES = 'https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/drive.appdata';
@@ -883,6 +885,7 @@
       '<a class="btn" href="https://tasks.google.com/" target="_blank" rel="noopener">' + ICON.ext + 'Open Google Tasks</a>' +
       '<button type="button" class="btn" data-act="signout">' + ICON.out + 'Sign out</button></div>' +
       '<p class="menu-note">Tasks you add from Gmail go to the list that’s open in Gmail’s Tasks panel. Keep “' + esc((listById(defaultListId) || {}).title || 'My Tasks') + '” open there and they’ll land at the top of your first list, with no date or priority.</p>' +
+      '<p class="menu-note">Version ' + VERSION + '</p>' +
       (hasDrive() && !driveOff ? '' : '<p class="menu-note">List colors and card styles are saved in this browser only, so they won’t show up on your other devices.</p>') +
       '<div class="sheet-actions"><div class="right"><button type="button" class="btn primary" data-act="close">Done</button></div></div>');
     s.addEventListener('click', function (e) {
