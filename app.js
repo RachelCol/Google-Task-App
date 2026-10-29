@@ -258,6 +258,8 @@
         if (e.offline) { pumping = false; syncUi(); clearTimeout(retryTimer); retryTimer = setTimeout(pump, 8000); return; }
         // If Google won't place it after the task above, send it again without a place (the board sorts it anyway)
         if (op.plain && op.u !== op.plain) { op.u = op.plain; persistQueue(); continue; }
+        // A reorder Google won't do isn't worth a warning; the board's own order still stands
+        if (op.skippable) { queue.shift(); persistQueue(); continue; }
         queue.shift(); persistQueue();
         toast((op.what ? 'Google didn’t accept that change (' + op.what + '): ' : 'Google didn’t accept that change: ') + (e.message || 'error'));
         refreshAfterQueue = true;
@@ -287,20 +289,20 @@
     for (var j = i - 1; j >= 0; j--) { var x = state.tasks[j]; if (x.listId === t.listId && !x.parent && !x.done) return x.id; }
     return null;
   }
-  function moveQuery(t, toList) {
+  function moveQuery(t, toList, noPlace) {
     var q = [];
     if (toList) q.push('destinationTasklist=' + toList);
-    var p = prevSibling(t);
+    var p = !noPlace && prevSibling(t);
     if (p) q.push('previous=' + p);
     return q.length ? '?' + q.join('&') : '';
   }
   // Send Google whatever changed on a task since "b" (a copy made with fields())
   function commit(t, b, reorder) {
     if (b.listId !== t.listId) {
-      enqueue({ m: 'POST', u: '/lists/' + b.listId + '/tasks/' + t.id + '/move' + moveQuery(t, t.listId), what: 'moving “' + t.title + '”' });
+      enqueue({ m: 'POST', u: '/lists/' + b.listId + '/tasks/' + t.id + '/move' + moveQuery(t, t.listId), plain: '/lists/' + b.listId + '/tasks/' + t.id + '/move' + moveQuery(t, t.listId, true), what: 'moving “' + t.title + '”' });
       t.parent = null;
     } else if (reorder && !t.parent && prevSibling(t) !== b.prev) {
-      enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks/' + t.id + '/move' + moveQuery(t), what: 'reordering' });
+      enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks/' + t.id + '/move' + moveQuery(t), skippable: true, what: 'reordering' });
     }
     var patch = {}, any = false;
     if (t.title !== b.title) { patch.title = t.title; any = true; }
@@ -311,9 +313,9 @@
   }
   function changed(a, b) { return ['listId', 'title', 'notes', 'priority', 'due', 'done'].some(function (k) { return a[k] !== b[k]; }); }
   function insertTask(t) {
+    // No place is given: Google puts it at the top of the list, and the board sorts it by date anyway
     t.id = 'tmp_' + uid();
-    var p = prevSibling(t);
-    enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks' + (p ? '?previous=' + p : ''), plain: '/lists/' + t.listId + '/tasks', b: toGoogle(t), tmp: t.id, what: 'adding “' + t.title + '”' });
+    enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks', b: toGoogle(t), tmp: t.id, what: 'adding “' + t.title + '”' });
   }
   function deleteTask(t) {
     var i = state.tasks.indexOf(t), copy = Object.assign({}, t);
