@@ -1,6 +1,6 @@
 // Keeps a copy of the app's own files so the board opens even with a weak connection.
 // Always tries the network first, so updates show up right away. Google's data is never cached here.
-var CACHE = 'task-board-v6';
+var CACHE = 'task-board-v7';
 var FILES = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {

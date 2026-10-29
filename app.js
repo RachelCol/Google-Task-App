@@ -712,6 +712,22 @@
     return scrim.querySelector('.sheet');
   }
 
+  // iPhone: Gmail's web link only reaches the inbox there, so offer the Gmail app and the mobile site straight to the thread.
+  // Trial buttons for now, to find which one opens the email on Rachel's phone.
+  var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  function threadId(link) {
+    var m = String(link || '').match(/[?&]th=([^&#]+)/) || String(link || '').match(/#[^?]*\/([^/?]+)\/?$/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function iosEmailTry(t) {
+    var id = threadId(t.email.link);
+    if (!IOS && !/[?&]trial=1/.test(location.search)) return '';
+    return '<div class="email-try"><span class="menu-note">Trying out ways to open this on iPhone:</span>' +
+      (id ? '<a class="btn" href="googlegmail:///cv=' + encodeURIComponent(id) + '/accountId=1&create-new-tab">1. Gmail app</a>' +
+        '<a class="btn" href="https://mail.google.com/mail/mu/mp/#cv/priority/%5Esmartlabel_personal/' + encodeURIComponent(id) + '" target="_blank" rel="noopener">2. Gmail website</a>' +
+        '<a class="btn" href="googlegmail://">3. Just open Gmail</a>' : '') +
+      '<span class="menu-note link-text">' + esc(t.email.link) + '</span></div>';
+  }
   function openTaskSheet(t) {
     var base = fields(t);
     var lists = state.lists.map(function (l) { return '<option value="' + l.id + '"' + (l.id === t.listId ? ' selected' : '') + '>' + esc(l.title) + '</option>'; }).join('');
@@ -720,7 +736,7 @@
     }).join('');
     var s = sheet(
       '<div class="field"><label for="t-title">Task</label><input id="t-title" class="title-input" value="' + esc(t.title) + '"></div>' +
-      (t.email ? '<div class="email-box"><div class="who"><div class="subj">' + esc(t.email.subject) + '</div><div class="from">Added from Gmail</div></div><a class="btn" data-act="email" href="' + esc(t.email.link) + '" target="_blank" rel="noopener">' + ICON.mail + 'Open email</a></div>' : '') +
+      (t.email ? '<div class="email-box"><div class="who"><div class="subj">' + esc(t.email.subject) + '</div><div class="from">Added from Gmail</div></div><a class="btn" data-act="email" href="' + esc(t.email.link) + '" target="_blank" rel="noopener">' + ICON.mail + 'Open email</a>' + iosEmailTry(t) + '</div>' : '') +
       '<div class="field"><span class="lbl">Priority</span><div class="seg">' + pri + '</div></div>' +
       '<div class="two"><div class="field"><label for="t-due">Due date</label><input id="t-due" type="date" value="' + esc(t.due) + '"></div>' +
       '<div class="field"><label for="t-list">List</label><select id="t-list">' + lists + '</select></div></div>' +
