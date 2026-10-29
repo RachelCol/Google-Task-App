@@ -222,6 +222,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .day.drop-target { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px var(--blue-t) !important; }
 .day.drop-target .day-head, .day.drop-target .day-head .num, .day.drop-target .day-head .today-tag { color: var(--accent-fg); opacity: 1; }
 .mcell { cursor: pointer; }
+.mcell.gone { cursor: default; background: var(--line); border-color: transparent; opacity: .55; }
+.mcell.gone .day-head .num { color: var(--muted); }
+@media (min-width: 1001px) { .day.today[style] { grid-column-start: var(--col); } }
 .mcell.selected { background: var(--card); border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
 .tip { position: fixed; z-index: 55; pointer-events: none; background: var(--fg); color: var(--bg); padding: 7px 11px; border-radius: 8px; font-size: 13.5px; font-weight: 500; max-width: 280px; box-shadow: 0 6px 18px var(--shadow); overflow-wrap: anywhere; }
 .tip .sub { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; opacity: .75; }
@@ -321,6 +324,6 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
 <main class="board" id="board" aria-label="Tasks"></main>
 <div id="layer"></div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

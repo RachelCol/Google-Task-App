@@ -514,17 +514,20 @@
       '<button type="button" class="icon-btn" data-act="close-pop" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="cards">' + selTasks.map(function (t) { return cardHTML(t, 'cal'); }).join('') + '</div>' +
       (selTasks.length ? '' : '<p class="empty-note">Nothing due this day.</p>') + '</section>';
-    var html = calTop(open, todayIso) + onDate +
-      '<button type="button" class="btn more-weeks" data-act="month-prev">' + ICON.plus + 'Show ' + fmt(new Date(first.getFullYear(), m - 1, 1, 12), { month: 'long' }) + '</button>';
-    // Months stack top to bottom; days outside each month are left blank so no day appears twice
+    var html = calTop(open, todayIso) + onDate;
+    // Months stack top to bottom; days outside each month are left blank so no day appears twice.
+    // The first month starts at this week's Monday; earlier days are left out (overdue tasks are in the box above).
+    var thisMon = mondayOf(today());
     for (var k = 0; k < monthsShown; k++) {
       var f = new Date(first.getFullYear(), m + k, 1, 12), mm = f.getMonth();
-      var st = mondayOf(f), endI = isoOf(addDays(mondayOf(new Date(f.getFullYear(), mm + 1, 0, 12)), 6));
+      var st = k === 0 && thisMon > f ? thisMon : mondayOf(f), endI = isoOf(addDays(mondayOf(new Date(f.getFullYear(), mm + 1, 0, 12)), 6));
       html += '<section class="month"><h2 class="month-name">' + fmt(f, { month: 'long', year: 'numeric' }) + '</h2><div class="month-grid">';
       for (var i = 0; i < 7; i++) html += '<div class="dow">' + fmt(addDays(st, i), { weekday: 'short' }) + '</div>';
       for (var d = st; isoOf(d) <= endI; d = addDays(d, 1)) {
         var di = isoOf(d);
         if (d.getMonth() !== mm) { html += '<div class="mcell-blank"></div>'; continue; }
+        // Earlier days of this week: grayed out, nothing to add or drop there
+        if (di < todayIso) { html += '<div class="day mcell gone" data-zone="nodrop" aria-hidden="true"><div class="day-head"><span class="num">' + d.getDate() + '</span></div></div>'; continue; }
         var tasks = byPriority(open.filter(function (t) { return t.due === di; }));
         html += '<div class="day mcell' + (di === todayIso ? ' today' : '') + (di === sel ? ' selected' : '') + '" data-noph data-act="selday" data-zone="date:' + di + '">' +
           '<div class="day-head"><span class="num">' + d.getDate() + '</span><button type="button" class="day-add" data-act="dayadd" aria-label="Add a task on ' + esc(fmt(d, { month: 'long', day: 'numeric' })) + '">' + ICON.plus + '</button></div>' +
@@ -542,14 +545,16 @@
       var start = addDays(mon, w * 7), end = addDays(start, 6);
       var name = w === 0 ? 'This week' : w === 1 ? 'Next week' : 'Week of ' + fmt(start, { month: 'short', day: 'numeric' });
       var wk = isoOf(start), endWk = isoOf(end), folded = !!(state.collapsedWeeks || {})[wk];
-      var inWeek = open.filter(function (t) { return t.due && t.due >= wk && t.due <= endWk; }).length;
+      var from = w === 0 ? todayIso : wk;
+      var inWeek = open.filter(function (t) { return t.due && t.due >= from && t.due <= endWk; }).length;
       html += '<section class="week"><h2><button type="button" class="week-toggle" data-act="week" data-week="' + wk + '" aria-expanded="' + !folded + '">' + ICON.chev + name +
-        '<span class="range">' + fmt(start, { month: 'short', day: 'numeric' }) + ' – ' + fmt(end, { month: 'short', day: 'numeric' }) + '</span>' +
+        '<span class="range">' + fmt(w === 0 ? now : start, { month: 'short', day: 'numeric' }) + ' – ' + fmt(end, { month: 'short', day: 'numeric' }) + '</span>' +
         (folded ? '<span class="range">&middot; ' + inWeek + ' task' + (inWeek === 1 ? '' : 's') + '</span>' : '') + '</button></h2><div class="days"' + (folded ? ' hidden' : '') + '>';
-      for (var i = 0; i < 7; i++) {
+      // This week starts at today; on computers today still sits under its own weekday
+      for (var i = w === 0 ? (now.getDay() + 6) % 7 : 0; i < 7; i++) {
         var d = addDays(start, i), di = isoOf(d);
         var tasks = byPriority(open.filter(function (t) { return t.due === di; }));
-        html += '<div class="day' + (di === todayIso ? ' today' : di < todayIso ? ' past' : '') + '" data-zone="date:' + di + '">' +
+        html += '<div class="day' + (di === todayIso ? ' today' : '') + '" data-zone="date:' + di + '"' + (di === todayIso ? ' style="--col:' + (i + 1) + '"' : '') + '>' +
           '<div class="day-head">' + fmt(d, { weekday: 'short' }) + ' <span class="num">' + d.getDate() + '</span>' + (di === todayIso ? '<span class="today-tag">Today</span>' : '') + '</div>' +
           '<div class="cards">' + tasks.map(function (t) { return cardHTML(t, 'cal'); }).join('') + '</div>' + addRow('date:' + di, 'Add') + '</div>';
       }
@@ -654,7 +659,6 @@
     if (act === 'listmenu') return openListSheet(listById(listId));
     if (act === 'more-weeks') { weeks++; return render(); }
     if (act === 'calmode') { state.calMode = actEl.dataset.mode; addingIn = null; save(); return render(); }
-    if (act === 'month-prev') { monthOffset--; monthsShown++; return render(); }
     if (act === 'month-more') { monthsShown++; return render(); }
     if (act === 'week') {
       state.collapsedWeeks = state.collapsedWeeks || {};
