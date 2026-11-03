@@ -5,7 +5,7 @@
 (function () {
   // The OAuth Client ID from Google Cloud (APIs & Services > Credentials). It is not a secret.
   // Shown in the menu, so it's easy to tell whether a phone has the latest update
-  var VERSION = '12';
+  var VERSION = '13';
   var CLIENT_ID = '781490508547-lg8vamkljt03bjnho0up53u4ma08mo75.apps.googleusercontent.com';
   var APP_URL = 'https://rachelcol.github.io/Google-Task-App/';
   var SCOPES = 'https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/drive.appdata';
@@ -24,7 +24,7 @@
   var PRI_TAG = { high: 1, med: 2, low: 3 };
   var PRI_COLS = [['none', 'No priority', 'slate'], ['high', 'High', 'rose'], ['med', 'Medium', 'yellow'], ['low', 'Low', 'green']];
   var NOTES = {
-    lists: 'Each list is sorted by priority, High first, and then by due date, overdue first. Drag cards between lists (on a phone, press and hold a card first). Tap a card to edit it, or a list’s <strong>&middot;&middot;&middot;</strong> button to change how it looks.',
+    lists: 'Each list is sorted by priority, High first, and then by due date, overdue first. Drag cards between lists (on a phone, press and hold a card first). Drag a list by its name to move it. Tap a card to edit it, or a list’s <strong>&middot;&middot;&middot;</strong> button to change how it looks.',
     priority: '<strong>Priority view.</strong> Each column is sorted by due date, overdue first. Drag a card to another column to change its priority, or drag it off the columns to clear it. “No priority” only appears when something needs sorting.',
     calendar: '<strong>Calendar view.</strong> Each day is sorted by priority, High first. Drag a card to another day to change its due date, or to “No due date” to clear it. Overdue tasks and tasks with no due date stay at the top in both Week and Month.'
   };
@@ -209,6 +209,10 @@
       var old = state.lists.find(function (x) { return x.id === l.id; }) || {}, s = looks[l.id] || {};
       return { id: l.id, title: l.title, color: s.color || old.color || (l.id === defaultListId ? 'blue' : COLORS[(i + 1) % COLORS.length]), compact: s.compact != null ? !!s.compact : !!old.compact };
     });
+    // Your list order (from the settings file, or as the board was); My Tasks always first, new lists at the end
+    var order = (settings && settings.listOrder) || b.lists.map(function (l) { return l.id; });
+    var rank = function (l) { if (l.id === defaultListId) return -1; var i = order.indexOf(l.id); return i < 0 ? 1e6 : i; };
+    state.lists = state.lists.map(function (l, i) { return { l: l, i: i }; }).sort(function (a, b) { return rank(a.l) - rank(b.l) || a.i - b.i; }).map(function (x) { return x.l; });
     state.tasks = b.tasks;
     if (settings) {
       if (settings.sortByPriority != null) state.sortByPriority = !!settings.sortByPriority;
@@ -345,7 +349,8 @@
   function settingsNow() {
     var looks = {};
     state.lists.forEach(function (l) { looks[l.id] = { color: l.color, compact: !!l.compact }; });
-    return { v: 1, lists: looks, sortByPriority: !!state.sortByPriority, calMode: state.calMode, collapsedWeeks: state.collapsedWeeks || {} };
+    var order = state.lists.map(function (l) { return l.id; }).filter(function (id) { return !/^tmp_/.test(id); });
+    return { v: 1, lists: looks, listOrder: order, sortByPriority: !!state.sortByPriority, calMode: state.calMode, collapsedWeeks: state.collapsedWeeks || {} };
   }
   async function loadSettings() {
     var local = load('tb-settings');
@@ -357,6 +362,8 @@
       settingsFileId = f.id;
       var s = await api('GET', DRIVE + '/files/' + f.id + '?alt=media');
       lastSettings = JSON.stringify(s);
+      // A change made here that hadn't reached Drive yet (the app closed too soon) wins, and goes up next
+      if (local && load('tb-settings-pending')) { saveSettingsSoon(); return local; }
       store('tb-settings', s);
       return s;
     } catch (e) {
@@ -368,14 +375,17 @@
   }
   function saveSettingsSoon() {
     if (phase !== 'ready') return;
+    var now = settingsNow();
+    if (!state.lists.some(function (l) { return /^tmp_/.test(l.id); }) && JSON.stringify(now) !== lastSettings) { store('tb-settings', now); store('tb-settings-pending', true); }
     clearTimeout(settingsTimer);
-    settingsTimer = setTimeout(saveSettings, 1200);
+    settingsTimer = setTimeout(function () { settingsTimer = null; saveSettings(); }, 1200);
   }
   async function saveSettings() {
     var s = settingsNow(), json = JSON.stringify(s);
     if (state.lists.some(function (l) { return /^tmp_/.test(l.id); })) return saveSettingsSoon();
     store('tb-settings', s);
-    if (json === lastSettings || !hasDrive() || driveOff) return;
+    if (json === lastSettings) { store('tb-settings-pending', null); return; }
+    if (!hasDrive() || driveOff) return;
     try {
       if (settingsFileId) await api('PATCH', DRIVE_UP + '/files/' + settingsFileId + '?uploadType=media', json, 'application/json');
       else {
@@ -386,6 +396,7 @@
         settingsFileId = r && r.id;
       }
       lastSettings = json;
+      store('tb-settings-pending', null);
     } catch (e) {
       if (e.status === 403) driveOff = true;
       else if (e.offline) saveSettingsSoon();
@@ -457,7 +468,7 @@
     state.lists.forEach(function (l) {
       var open = openTasks(l.id);
       var done = state.tasks.filter(function (t) { return t.listId === l.id && t.done; });
-      html += '<section class="column' + (l.compact ? ' compact' : '') + '" data-zone="list:' + l.id + '" data-list="' + l.id + '" data-color="' + l.color + '">' +
+      html += '<section class="column' + (l.compact ? ' compact' : '') + (l.id === defaultListId ? ' main-list' : '') + '" data-zone="list:' + l.id + '" data-list="' + l.id + '" data-color="' + l.color + '">' +
         '<div class="col-head"><h2>' + esc(l.title) + '</h2><span class="count">' + open.length + '</span>' +
         '<button type="button" class="icon-btn" data-act="listmenu" aria-label="List settings for ' + esc(l.title) + '">' + ICON.dots + '</button></div>' +
         '<div class="cards">' + open.map(function (t) { return cardHTML(t, 'list'); }).join('') + '</div>' +
@@ -587,15 +598,26 @@
     document.getElementById('tools').hidden = !ready;
     document.getElementById('note').hidden = !ready;
     if (!ready) { board.className = 'board gate'; board.innerHTML = renderGate(); syncUi(); return; }
-    var sl = board.scrollLeft, v = state.view;
+    var sl = board.scrollLeft, v = state.view, colTops = {};
+    // Lists that scroll on their own keep their place when the board redraws
+    board.querySelectorAll('.column').forEach(function (c) { if (c.scrollTop) colTops[c.dataset.list || c.dataset.zone] = c.scrollTop; });
     board.className = v === 'calendar' ? 'cal' + (state.calMode === 'month' && selectedDate ? ' has-pop' : '') : 'board';
     board.innerHTML = v === 'priority' ? renderPriority() : v === 'calendar' ? renderCalendar() : renderLists();
     board.scrollLeft = sl;
+    board.querySelectorAll('.column').forEach(function (c) { var top = colTops[c.dataset.list || c.dataset.zone]; if (top) c.scrollTop = top; });
     document.getElementById('note').innerHTML = NOTES[v];
+    fitBoard();
     document.querySelectorAll('[data-view]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.view === v)); });
     focusAdd = false;
     syncUi();
   }
+
+  // Computers: the board fills the rest of the window and each list scrolls on its own, so every list's name stays in view
+  function fitBoard() {
+    if (board.className !== 'board') return;
+    board.style.setProperty('--board-top', Math.max(0, board.getBoundingClientRect().top + window.scrollY) + 'px');
+  }
+  window.addEventListener('resize', fitBoard);
 
   // The little label next to the title: saving, offline, or sign-in needed
   function syncUi() {
@@ -830,7 +852,10 @@
       '<div class="field"><span class="lbl">Card style</span><div class="seg">' +
         '<button type="button" data-compact="0" aria-pressed="' + !l.compact + '">Detailed</button>' +
         '<button type="button" data-compact="1" aria-pressed="' + !!l.compact + '">Compact</button></div></div>' +
-      (l.id === defaultListId ? '<p class="menu-note">This is your main Google Tasks list, where tasks from Gmail usually land, so it stays first.</p>' : '') +
+      (l.id === defaultListId ? '<p class="menu-note">This is your main Google Tasks list, where tasks from Gmail usually land, so it stays first.</p>' :
+        state.lists.length > 2 ? '<div class="field"><label for="l-pos">Position</label><select id="l-pos">' + state.lists.map(function (x, i) {
+          return i === 0 ? '' : '<option value="' + i + '"' + (x === l ? ' selected' : '') + '>' + (i + 1) + (i === 1 ? ' (right after ' + esc(state.lists[0].title) + ')' : i === state.lists.length - 1 ? ' (last)' : '') + '</option>';
+        }).join('') + '</select><span class="menu-note">You can also press and hold a list’s name and drag it.</span></div>' : '') +
       '<div class="confirm-slot"></div>' +
       '<div class="sheet-actions">' + (canDelete ? '<button type="button" class="btn danger" data-act="delete">Delete list</button>' : '') +
       '<div class="right"><button type="button" class="btn primary" data-act="close">Done</button></div></div>',
@@ -844,6 +869,12 @@
         }
         baseTitle = l.title;
       });
+    var pos = s.querySelector('#l-pos');
+    if (pos) pos.addEventListener('change', function () {
+      var ids = state.lists.map(function (x) { return x.id; }).filter(function (id) { return id !== l.id; });
+      ids.splice(Number(pos.value), 0, l.id);
+      setListOrder(ids);
+    });
     var title = s.querySelector('#l-title');
     title.addEventListener('input', function (e) { l.title = e.target.value || 'Untitled list'; save(); render(); });
     s.addEventListener('click', function (e) {
@@ -891,6 +922,13 @@
   // Each drop target carries data-zone: "list:<id>", "pri:<level>", "date:<yyyy-mm-dd>" or "date:" for no date.
   var press = null, drag = null, suppressClick = false, lastX = 0, lastY = 0;
   board.addEventListener('pointerdown', function (e) {
+    var head = state.view === 'lists' && e.target.closest('.column:not(.main-list) > .col-head');
+    if (head && e.button === 0 && !e.target.closest('button, input, a')) {
+      var col = head.parentNode;
+      press = { list: col.dataset.list, card: col, x: e.clientX, y: e.clientY, type: e.pointerType, timer: null };
+      if (e.pointerType !== 'mouse') press.timer = setTimeout(function () { if (press) startDrag(press.x, press.y); }, 300);
+      return;
+    }
     var card = e.target.closest('.card');
     if (!card || card.classList.contains('done') || e.button > 0) return;
     if (e.target.closest('button, input, a, textarea, select')) return;
@@ -916,7 +954,55 @@
   document.addEventListener('touchmove', function (e) { if (drag) e.preventDefault(); }, { passive: false });
   document.addEventListener('contextmenu', function (e) { if (drag || (press && press.type !== 'mouse')) e.preventDefault(); });
 
+  function startListDrag(x, y) {
+    var col = press.card, r = col.getBoundingClientRect();
+    clearTimeout(press.timer);
+    var ghost = col.cloneNode(true);
+    ghost.classList.add('ghost', 'list-ghost');
+    ghost.style.width = r.width + 'px'; ghost.style.left = r.left + 'px'; ghost.style.top = r.top + 'px';
+    var ph = document.createElement('div'); ph.className = 'col-ph';
+    ph.style.width = r.width + 'px'; ph.style.height = Math.min(r.height, window.innerHeight * 0.6) + 'px';
+    col.parentNode.insertBefore(ph, col);
+    col.classList.add('src-hidden');
+    document.body.appendChild(ghost);
+    document.body.classList.add('is-dragging');
+    drag = { list: press.list, ghost: ghost, ph: ph, offX: x - r.left, offY: y - r.top, before: state.lists.map(function (l) { return l.id; }) };
+    lastX = x; lastY = y; press = null;
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+    requestAnimationFrame(autoScroll);
+  }
+  // The gap opens in front of the first list whose middle is right of the finger (never in front of My Tasks)
+  function moveListDrag() {
+    drag.ghost.style.left = (lastX - drag.offX) + 'px';
+    drag.ghost.style.top = (lastY - drag.offY) + 'px';
+    var cols = Array.prototype.filter.call(board.querySelectorAll('.column'), function (c) { return !c.classList.contains('src-hidden') && !c.classList.contains('main-list'); });
+    var before = null;
+    for (var i = 0; i < cols.length; i++) { var r = cols[i].getBoundingClientRect(); if (lastX < r.left + r.width / 2) { before = cols[i]; break; } }
+    if (!before) before = board.querySelector('.new-col');
+    if (drag.ph.nextSibling !== before) board.insertBefore(drag.ph, before);
+  }
+  function endListDrag(commitIt) {
+    var d = drag; drag = null;
+    document.body.classList.remove('is-dragging');
+    d.ghost.remove();
+    suppressClick = true; setTimeout(function () { suppressClick = false; }, 60);
+    if (commitIt) {
+      var ids = [];
+      Array.prototype.forEach.call(board.children, function (c) {
+        if (c === d.ph) ids.push(d.list);
+        else if (c.classList.contains('column') && c.dataset.list !== d.list) ids.push(c.dataset.list);
+      });
+      setListOrder(ids.map(realId), d.before);
+    } else render();
+  }
+  function setListOrder(ids, before) {
+    var was = state.lists.map(function (l) { return l.id; }).join();
+    state.lists = ids.map(function (id) { return listById(id); }).filter(Boolean).concat(state.lists.filter(function (l) { return ids.indexOf(l.id) < 0; }));
+    save(); render();
+    if (before && state.lists.map(function (l) { return l.id; }).join() !== was) toast('List moved', function () { setListOrder(before); });
+  }
   function startDrag(x, y) {
+    if (press.list) return startListDrag(x, y);
     var card = press.card, r = card.getBoundingClientRect();
     clearTimeout(press.timer);
     hideTip();
@@ -938,6 +1024,7 @@
     requestAnimationFrame(autoScroll);
   }
   function moveDrag() {
+    if (drag.list) return moveListDrag();
     drag.ghost.style.left = (lastX - drag.offX) + 'px';
     drag.ghost.style.top = (lastY - drag.offY) + 'px';
     var el = document.elementFromPoint(lastX, lastY);
@@ -973,6 +1060,16 @@
   }
   function autoScroll() {
     if (!drag) return;
+    // Computers: a list scrolls on its own, so scroll the one under the card when it nears that list's top or bottom
+    if (!drag.list && state.view !== 'calendar' && window.innerWidth > 600) {
+      var under = document.elementFromPoint(lastX, lastY), col = under && under.closest('.board .column');
+      if (col && col.scrollHeight > col.clientHeight) {
+        var cr = col.getBoundingClientRect(), cv = 0;
+        if (lastY < cr.top + 70) cv = -Math.ceil((cr.top + 70 - lastY) / 5);
+        else if (lastY > cr.bottom - 50) cv = Math.ceil((lastY - (cr.bottom - 50)) / 5);
+        if (cv) { col.scrollTop += cv; moveDrag(); }
+      }
+    }
     if (state.view !== 'calendar') {
       var r = board.getBoundingClientRect();
       if (board.clientWidth < 700) {
@@ -1067,6 +1164,7 @@
   });
   window.addEventListener('scroll', hideTip, { passive: true });
   function endDrag(commitIt) {
+    if (drag.list) return endListDrag(commitIt);
     var d = drag; drag = null;
     document.body.classList.remove('is-dragging');
     d.ghost.remove();
@@ -1108,7 +1206,7 @@
 
   /* ---------- Starting up, and keeping up to date ---------- */
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'hidden') { flushSheet(); return; }
+    if (document.visibilityState === 'hidden') { flushSheet(); if (settingsTimer) { clearTimeout(settingsTimer); settingsTimer = null; saveSettings(); } return; }
     if (phase !== 'ready') return;
     if (!tokenOk()) return needAuth();
     if (Date.now() - lastLoad > 30000) refresh(true);

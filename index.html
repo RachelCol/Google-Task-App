@@ -130,6 +130,15 @@ button { cursor: pointer; }
 .new-col { flex: 0 0 260px; border: 2px dashed var(--line); border-radius: 14px; padding: 10px; scroll-snap-align: start; }
 .new-col .add-btn { color: var(--muted); }
 
+@media (min-width: 601px) {
+  .board:not(.gate) { height: calc(100dvh - var(--board-top, 160px)); padding-bottom: 16px; }
+  .board .column { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+  .board .column > *, .board .column .card { flex-shrink: 0; }
+  .board .column > .col-head { position: sticky; top: 0; z-index: 2; background: var(--lt); border-radius: 14px 14px 0 0; }
+}
+.board .column:not(.main-list) > .col-head { cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.col-ph { flex: 0 0 auto; border: 2px dashed var(--accent); border-radius: 14px; opacity: .6; }
+.list-ghost { max-height: 60vh; overflow: hidden; transform: rotate(1.5deg); }
 .placeholder { border: 2px dashed var(--lc); border-radius: var(--r); background: transparent; opacity: .6; }
 .ghost { position: fixed; z-index: 50; pointer-events: none; opacity: .92; transform: rotate(2.5deg); box-shadow: 0 12px 28px var(--shadow); cursor: grabbing; margin: 0; }
 .src-hidden { display: none !important; }
@@ -328,6 +337,6 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
 <main class="board" id="board" aria-label="Tasks"></main>
 <div id="layer"></div>
 
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
