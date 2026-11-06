@@ -5,7 +5,7 @@
 (function () {
   // The OAuth Client ID from Google Cloud (APIs & Services > Credentials). It is not a secret.
   // Shown in the menu, so it's easy to tell whether a phone has the latest update
-  var VERSION = '13';
+  var VERSION = '14';
   var CLIENT_ID = '781490508547-lg8vamkljt03bjnho0up53u4ma08mo75.apps.googleusercontent.com';
   var APP_URL = 'https://rachelcol.github.io/Google-Task-App/';
   var SCOPES = 'https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/drive.appdata';
@@ -24,7 +24,7 @@
   var PRI_TAG = { high: 1, med: 2, low: 3 };
   var PRI_COLS = [['none', 'No priority', 'slate'], ['high', 'High', 'rose'], ['med', 'Medium', 'yellow'], ['low', 'Low', 'green']];
   var NOTES = {
-    lists: 'Each list is sorted by priority, High first, and then by due date, overdue first. Drag cards between lists (on a phone, press and hold a card first). Drag a list by its name to move it. Tap a card to edit it, or a list’s <strong>&middot;&middot;&middot;</strong> button to change how it looks.',
+    lists: 'Each list is sorted by priority, High first, and then by due date, overdue first. Drag cards between lists (on a phone, press and hold a card first). Hold a card over another card to group it there. Drag a list by its name to move it. Tap a card to edit it, or a list’s <strong>&middot;&middot;&middot;</strong> button to change how it looks.',
     priority: '<strong>Priority view.</strong> Each column is sorted by due date, overdue first. Drag a card to another column to change its priority, or drag it off the columns to clear it. “No priority” only appears when something needs sorting.',
     calendar: '<strong>Calendar view.</strong> Each day is sorted by priority, High first. Drag a card to another day to change its due date, or to “No due date” to clear it. Overdue tasks and tasks with no due date stay at the top in both Week and Month.'
   };
@@ -38,6 +38,7 @@
     chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
     refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/></svg>',
     out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>',
     ext: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
   };
 
@@ -53,7 +54,9 @@
   function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
   function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 
-  var state = { view: load('tb-view') || 'lists', sortByPriority: false, calMode: 'week', collapsedWeeks: {}, lists: [], tasks: [] };
+  var state = { view: load('tb-view') || 'lists', sortByPriority: false, calMode: 'week', collapsedWeeks: {}, grouped: {}, lists: [], tasks: [] };
+  // Umbrella cards whose grouped tasks are dropped down (this device only)
+  var openGroups = load('tb-open-groups') || {};
   var phase = 'loading', gateMsg = '', defaultListId = null;
   var monthOffset = 0, monthsShown = 3, selectedDate = null, focusAdd = false, trayOpen = { over: false, nodate: false };
   var openDone = {};
@@ -65,6 +68,19 @@
   function realId(id) { return idMap[id] || id; }
   function listById(id) { id = realId(id); return state.lists.find(function (l) { return l.id === id; }); }
   function taskById(id) { id = realId(id); return state.tasks.find(function (t) { return t.id === id; }); }
+  /* Grouping uses Google's subtasks (one level only, always in the umbrella's list). Two kinds live under a task:
+     typed steps (plain checkboxes: no email, priority, date or notes) and grouped tasks (full tasks shown as rows).
+     A plain task you group yourself is remembered in the settings file, so it stays a row. */
+  function kidsOf(t) { return state.tasks.filter(function (c) { return c.parent && c.parent === t.id; }); }
+  function parentOf(t) { return t.parent ? taskById(t.parent) : null; }
+  function isStep(t) { return !!t.parent && !t.email && !t.priority && !t.due && !t.notes && !state.grouped[t.id]; }
+  function rowsOf(t) { return kidsOf(t).filter(function (c) { return !isStep(c); }); }
+  function stepsOf(t) { return kidsOf(t).filter(isStep); }
+  // Shown as its own card in a list: not grouped, or its umbrella is gone or already checked off
+  function topLevel(t) { var p = parentOf(t); if (!p) return true; if (isStep(t)) return false; return p.done && !t.done; }
+  // Shown in Priority and Calendar views: everything except steps
+  function onBoard(t) { return !(isStep(t) && parentOf(t)); }
+  function markRow(t) { if (t.parent && !state.grouped[t.id]) state.grouped[t.id] = true; }
   function safeId(k) { return 'add-' + k.replace(/[^a-z0-9]/gi, '_'); }
 
   function save() {
@@ -218,6 +234,7 @@
       if (settings.sortByPriority != null) state.sortByPriority = !!settings.sortByPriority;
       if (settings.calMode) state.calMode = settings.calMode;
       if (settings.collapsedWeeks) state.collapsedWeeks = settings.collapsedWeeks;
+      if (settings.grouped) state.grouped = Object.assign({}, settings.grouped);
     }
   }
 
@@ -279,6 +296,9 @@
     idMap[tmp] = res.id;
     var t = state.tasks.find(function (x) { return x.id === tmp; });
     if (t) { t.id = res.id; t.pos = res.position || ''; t.web = res.webViewLink || ''; }
+    state.tasks.forEach(function (x) { if (x.parent === tmp) x.parent = res.id; });
+    if (state.grouped[tmp]) { state.grouped[res.id] = true; delete state.grouped[tmp]; }
+    if (openGroups[tmp]) { openGroups[res.id] = true; delete openGroups[tmp]; store('tb-open-groups', openGroups); }
     var l = state.lists.find(function (x) { return x.id === tmp; });
     if (l) {
       l.id = res.id;
@@ -288,7 +308,7 @@
     save();
   }
 
-  function fields(t) { return { listId: t.listId, title: t.title, notes: t.notes, priority: t.priority, due: t.due, done: t.done, prev: prevSibling(t) }; }
+  function fields(t) { return { listId: t.listId, parent: t.parent || null, title: t.title, notes: t.notes, priority: t.priority, due: t.due, done: t.done, prev: prevSibling(t) }; }
   // The open task just above this one in its list (Google places tasks after a "previous" task, which can't be a checked-off one)
   function prevSibling(t) {
     var i = state.tasks.indexOf(t);
@@ -304,9 +324,23 @@
   }
   // Send Google whatever changed on a task since "b" (a copy made with fields())
   function commit(t, b, reorder) {
+    var bp = b.parent || null, tp = t.parent || null;
     if (b.listId !== t.listId) {
       enqueue({ m: 'POST', u: '/lists/' + b.listId + '/tasks/' + t.id + '/move' + moveQuery(t, t.listId), plain: '/lists/' + b.listId + '/tasks/' + t.id + '/move' + moveQuery(t, t.listId, true), what: 'moving “' + t.title + '”' });
-      t.parent = null;
+      // Then into its group in the new list
+      if (tp) enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks/' + t.id + '/move?parent=' + tp, what: 'grouping “' + t.title + '”' });
+      // An umbrella takes its steps and grouped tasks along (skipped quietly if Google already moved them)
+      var kids = state.tasks.filter(function (c) { return c !== t && c.parent === t.id; });
+      kids.forEach(function (c) {
+        var from = c.listId; c.listId = t.listId;
+        if (from !== t.listId) enqueue({ m: 'POST', u: '/lists/' + from + '/tasks/' + c.id + '/move?destinationTasklist=' + t.listId, skippable: true });
+        enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks/' + c.id + '/move?parent=' + t.id, skippable: true });
+      });
+      if (kids.length) refreshAfterQueue = true;
+    } else if (bp !== tp) {
+      var mv = '/lists/' + t.listId + '/tasks/' + t.id + '/move';
+      if (tp) enqueue({ m: 'POST', u: mv + '?parent=' + tp, what: 'grouping “' + t.title + '”' });
+      else enqueue({ m: 'POST', u: mv + moveQuery(t), plain: mv, what: 'taking “' + t.title + '” out of its group' });
     } else if (reorder && !t.parent && prevSibling(t) !== b.prev) {
       enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks/' + t.id + '/move' + moveQuery(t), skippable: true, what: 'reordering' });
     }
@@ -317,17 +351,29 @@
     if (t.done !== b.done) { patch.status = t.done ? 'completed' : 'needsAction'; if (!t.done) patch.completed = null; any = true; }
     if (any) enqueue({ m: 'PATCH', u: '/lists/' + t.listId + '/tasks/' + t.id, b: patch, what: '“' + t.title + '”' });
   }
-  function changed(a, b) { return ['listId', 'title', 'notes', 'priority', 'due', 'done'].some(function (k) { return a[k] !== b[k]; }); }
+  function changed(a, b) { return ['listId', 'parent', 'title', 'notes', 'priority', 'due', 'done'].some(function (k) { return (a[k] || null) !== (b[k] || null); }); }
   function insertTask(t) {
     // No place is given: Google puts it at the top of the list, and the board sorts it by date anyway
     t.id = 'tmp_' + uid();
-    enqueue({ m: 'POST', u: '/lists/' + t.listId + '/tasks', b: toGoogle(t), tmp: t.id, what: 'adding “' + t.title + '”' });
+    var u = '/lists/' + t.listId + '/tasks';
+    if (t.parent) {
+      // A step goes after the last step Google already knows (or first, if Google won't place it)
+      var sib = state.tasks.filter(function (c) { return c !== t && c.parent === t.parent && !/^tmp_/.test(c.id); }).pop();
+      enqueue({ m: 'POST', u: u + '?parent=' + t.parent + (sib ? '&previous=' + sib.id : ''), plain: u + '?parent=' + t.parent, b: toGoogle(t), tmp: t.id, what: 'adding the step “' + t.title + '”' });
+      return;
+    }
+    enqueue({ m: 'POST', u: u, b: toGoogle(t), tmp: t.id, what: 'adding “' + t.title + '”' });
   }
-  function deleteTask(t) {
+  function deleteTask(t, keepRows) {
+    // Google deletes whatever is under a task along with it; grouped tasks can be taken out first
+    if (keepRows) rowsOf(t).forEach(function (c) { ungroup(c, true); });
+    var gone = kidsOf(t);
+    state.tasks = state.tasks.filter(function (x) { return gone.indexOf(x) < 0; });
     var i = state.tasks.indexOf(t), copy = Object.assign({}, t);
     state.tasks.splice(i, 1);
     enqueue({ m: 'DELETE', u: '/lists/' + t.listId + '/tasks/' + t.id, what: 'deleting “' + t.title + '”' });
     save(); render();
+    if (gone.length) return toast('Deleted with ' + gone.length + ' item' + (gone.length > 1 ? 's' : '') + ' under it');
     // Undo adds it back as a new task (Google can't restore the Gmail link on a re-added task)
     toast('Task deleted', function () {
       var back = Object.assign(copy, { email: null, parent: null });
@@ -338,7 +384,7 @@
   // Put a task back the way it was before a change
   function undoTo(t, b, index) {
     var now = fields(t);
-    Object.assign(t, { listId: b.listId, title: b.title, notes: b.notes, priority: b.priority, due: b.due, done: b.done });
+    Object.assign(t, { listId: b.listId, parent: b.parent || null, title: b.title, notes: b.notes, priority: b.priority, due: b.due, done: b.done });
     if (index != null) { state.tasks.splice(state.tasks.indexOf(t), 1); state.tasks.splice(Math.min(index, state.tasks.length), 0, t); }
     commit(t, now, index != null);
     save(); render();
@@ -350,7 +396,9 @@
     var looks = {};
     state.lists.forEach(function (l) { looks[l.id] = { color: l.color, compact: !!l.compact }; });
     var order = state.lists.map(function (l) { return l.id; }).filter(function (id) { return !/^tmp_/.test(id); });
-    return { v: 1, lists: looks, listOrder: order, sortByPriority: !!state.sortByPriority, calMode: state.calMode, collapsedWeeks: state.collapsedWeeks || {} };
+    var grouped = {};
+    Object.keys(state.grouped || {}).forEach(function (id) { if (!/^tmp_/.test(id) && state.tasks.some(function (t) { return t.id === id; })) grouped[id] = true; });
+    return { v: 1, lists: looks, listOrder: order, sortByPriority: !!state.sortByPriority, calMode: state.calMode, collapsedWeeks: state.collapsedWeeks || {}, grouped: grouped };
   }
   async function loadSettings() {
     var local = load('tb-settings');
@@ -427,18 +475,51 @@
       return ra - rb || a.i - b.i;
     }).map(function (x) { return x.t; });
   }
+  // How urgent a task is for sorting: its priority, then its date. An umbrella counts as urgent as its most urgent open grouped task.
+  function urgency(t) {
+    var best = { r: t.priority ? PRI_RANK[t.priority] : 3, d: t.due || '9999-99-99' };
+    if (!t.parent) rowsOf(t).forEach(function (c) {
+      if (c.done) return;
+      var r = c.priority ? PRI_RANK[c.priority] : 3, d = c.due || '9999-99-99';
+      if (r < best.r || (r === best.r && d < best.d)) best = { r: r, d: d };
+    });
+    return best;
+  }
   // Lists view: High, Medium, Low, then no priority; within each, earliest due date first (overdue first), undated last
   function byPriorityThenDue(arr) {
-    return arr.map(function (t, i) { return { t: t, i: i }; }).sort(function (a, b) {
-      var ra = a.t.priority ? PRI_RANK[a.t.priority] : 3, rb = b.t.priority ? PRI_RANK[b.t.priority] : 3;
-      if (ra !== rb) return ra - rb;
-      var da = a.t.due || '9999-99-99', db = b.t.due || '9999-99-99';
-      return da < db ? -1 : da > db ? 1 : a.i - b.i;
+    return arr.map(function (t, i) { return { t: t, i: i, u: urgency(t) }; }).sort(function (a, b) {
+      if (a.u.r !== b.u.r) return a.u.r - b.u.r;
+      return a.u.d < b.u.d ? -1 : a.u.d > b.u.d ? 1 : a.i - b.i;
     }).map(function (x) { return x.t; });
   }
   function openTasks(listId) {
-    var arr = state.tasks.filter(function (t) { return t.listId === listId && !t.done; });
+    var arr = state.tasks.filter(function (t) { return t.listId === listId && !t.done && topLevel(t); });
     return byPriorityThenDue(arr);
+  }
+  function boardOpen() { return state.tasks.filter(function (t) { return !t.done && onBoard(t); }); }
+
+  // The umbrella's grouped tasks: one folded line ("3 grouped emails · 1 high priority"); the caret drops them all down
+  function groupHTML(t) {
+    var rows = rowsOf(t);
+    if (!rows.length) return '';
+    var open = byPriorityThenDue(rows.filter(function (c) { return !c.done; })), done = rows.filter(function (c) { return c.done; });
+    var mail = rows.every(function (c) { return c.email; }) ? 'email' : 'task';
+    var high = open.filter(function (c) { return c.priority === 'high'; }).length;
+    var label = open.length ? open.length + ' grouped ' + mail + (open.length === 1 ? '' : 's') : 'All grouped ' + mail + 's done';
+    if (high) label += ' &middot; ' + high + ' high priority';
+    if (done.length && open.length) label += ' &middot; ' + done.length + ' done';
+    var isOpen = !!openGroups[t.id];
+    return '<div class="group"><button type="button" class="group-toggle" data-act="group" aria-expanded="' + isOpen + '">' + ICON.chev + '<span>' + label + '</span></button>' +
+      (isOpen ? '<div class="group-rows">' + open.concat(done).map(rowHTML).join('') + '</div>' : '') + '</div>';
+  }
+  function rowHTML(c) {
+    var di = dueInfo(c.due), meta = '';
+    if (c.priority) meta += '<span class="chip ' + c.priority + '">' + PRI[c.priority] + '</span>';
+    if (di) meta += '<span class="due ' + (c.done ? '' : di.cls) + '">' + ICON.cal + esc(di.label) + '</span>';
+    if (c.email) meta += '<a class="email" data-act="email" href="' + esc(emailHref(c)) + '" target="_blank" rel="noopener" title="Open email in Gmail" aria-label="Open email">' + ICON.mail + '</a>';
+    return '<div class="grow' + (c.done ? ' done' : '') + '" data-row="' + c.id + '" data-p="' + (c.priority || '') + '" tabindex="0" role="button" aria-label="' + esc(c.title) + '">' +
+      '<button type="button" class="check" data-act="toggle-row" aria-label="' + (c.done ? 'Mark not done' : 'Mark done') + '">' + ICON.check + '</button>' +
+      '<div class="gtitle">' + esc(c.title || 'Untitled task') + '</div>' + (meta ? '<div class="gmeta">' + meta + '</div>' : '') + '</div>';
   }
 
   // mode: 'list' (priority chip), 'pri' (list name), 'cal' (priority + list, no date), 'over' (all)
@@ -452,11 +533,15 @@
     if (mode !== 'list' && l) meta += '<span class="list-tag" style="color:var(--' + l.color + ')">' + esc(l.title) + '</span>';
     if (di && mode !== 'cal') meta += '<span class="due ' + (t.done ? '' : di.cls) + '">' + ICON.cal + esc(di.label) + '</span>';
     if (t.notes && mode !== 'cal') meta += '<span class="notes-mark" title="Has notes">' + ICON.notes + '</span>';
+    var steps = t.parent ? [] : stepsOf(t);
+    if (steps.length && mode !== 'cal') meta += '<span class="steps-mark" title="Steps done">' + ICON.check + steps.filter(function (c) { return c.done; }).length + '/' + steps.length + '</span>';
+    var up = mode !== 'list' && parentOf(t);
+    if (up) meta += '<span class="in-tag">in “' + esc(up.title) + '”</span>';
     if (t.email) meta += '<a class="email" data-act="email" href="' + esc(emailHref(t)) + '" target="_blank" rel="noopener" title="Open email in Gmail">' + ICON.mail + (mode === 'cal' ? '' : '<span class="email-from">Open email</span>') + '</a>';
     return '<div class="card' + (t.done ? ' done' : '') + '" data-id="' + t.id + '" data-p="' + (t.priority || '') + '" tabindex="0" role="button" aria-label="' + esc(t.title) + '">' +
       '<button type="button" class="check" data-act="toggle" aria-label="' + (t.done ? 'Mark not done' : 'Mark done') + '">' + ICON.check + '</button>' +
       '<div class="title">' + esc(t.title || 'Untitled task') + '</div>' +
-      (meta ? '<div class="meta">' + meta + '</div>' : '') + '</div>';
+      (meta ? '<div class="meta">' + meta + '</div>' : '') + (mode === 'list' && !t.parent && !t.done ? groupHTML(t) : '') + '</div>';
   }
 
   function addRow(key, label) {
@@ -467,7 +552,7 @@
     var html = '';
     state.lists.forEach(function (l) {
       var open = openTasks(l.id);
-      var done = state.tasks.filter(function (t) { return t.listId === l.id && t.done; });
+      var done = state.tasks.filter(function (t) { return t.listId === l.id && t.done && topLevel(t); });
       html += '<section class="column' + (l.compact ? ' compact' : '') + (l.id === defaultListId ? ' main-list' : '') + '" data-zone="list:' + l.id + '" data-list="' + l.id + '" data-color="' + l.color + '">' +
         '<div class="col-head"><h2>' + esc(l.title) + '</h2><span class="count">' + open.length + '</span>' +
         '<button type="button" class="icon-btn" data-act="listmenu" aria-label="List settings for ' + esc(l.title) + '">' + ICON.dots + '</button></div>' +
@@ -482,7 +567,7 @@
 
   function renderPriority() {
     return PRI_COLS.map(function (p) {
-      var tasks = byDue(state.tasks.filter(function (t) { return !t.done && (t.priority || 'none') === p[0]; }));
+      var tasks = byDue(boardOpen().filter(function (t) { return (t.priority || 'none') === p[0]; }));
       if (p[0] === 'none' && !tasks.length) return '';
       return '<section class="column" data-zone="pri:' + p[0] + '" data-color="' + p[2] + '">' +
         '<div class="col-head"><h2>' + p[1] + '</h2><span class="count">' + tasks.length + '</span></div>' +
@@ -520,7 +605,7 @@
   }
   function renderMonth(first) {
     var todayIso = isoOf(today()), m = first.getMonth();
-    var open = state.tasks.filter(function (t) { return !t.done; });
+    var open = boardOpen();
     // A pop-up with the tapped day's tasks, full size, ready to drag onto other days
     var sel = selectedDate, selTasks = byPriority(open.filter(function (t) { return t.due === sel; }));
     var onDate = !sel ? '' : '<section class="zone on-date" data-noph data-zone="date:' + sel + '" data-color="blue" aria-label="Tasks on this date"><div class="col-head"><h2>' + fmt(parseIso(sel), { weekday: 'long', month: 'short', day: 'numeric' }) + '</h2><span class="count">' + selTasks.length + '</span>' +
@@ -552,7 +637,7 @@
   }
   function renderWeeks() {
     var now = today(), todayIso = isoOf(now), mon = mondayOf(now);
-    var open = state.tasks.filter(function (t) { return !t.done; });
+    var open = boardOpen();
     var html = calTop(open, todayIso);
     for (var w = 0; w < weeks; w++) {
       var start = addDays(mon, w * 7), end = addDays(start, 6);
@@ -646,13 +731,66 @@
   }
 
   function toggleTask(t) {
-    var before = fields(t);
+    // Checking off an umbrella whose grouped tasks are still open: ask first
+    var openRows = !t.done && !t.parent ? rowsOf(t).filter(function (c) { return !c.done; }) : [];
+    if (openRows.length) return askCheckOff(t, openRows);
+    finishTask(t, [], []);
+  }
+  // t flips done/not done; "also" get checked off with it; "outs" move back out of the group as their own cards
+  function finishTask(t, also, outs) {
+    var snaps = [];
+    function snap(x) { snaps.push({ t: x, b: fields(x), i: state.tasks.indexOf(x) }); }
+    var steps = !t.done && !t.parent ? stepsOf(t).filter(function (c) { return !c.done; }) : [];
+    snap(t); also.concat(steps, outs).forEach(snap);
     t.done = !t.done;
+    also.concat(steps).forEach(function (x) { x.done = true; });
+    outs.forEach(function (x) { x.parent = null; });
+    snaps.forEach(function (sn) { commit(sn.t, sn.b, outs.indexOf(sn.t) >= 0); });
+    save(); render();
+    var msg = !t.done ? 'Moved back to the list' : also.length ? 'Checked off with ' + also.length + ' grouped task' + (also.length > 1 ? 's' : '') :
+      outs.length ? 'Checked off; ' + outs.length + ' grouped task' + (outs.length > 1 ? 's are' : ' is') + ' back on ' + (outs.length > 1 ? 'their own' : 'its own') : 'Checked off “' + t.title + '”';
+    toast(msg, function () { snaps.slice().reverse().forEach(function (sn) { undoTo(sn.t, sn.b, outs.indexOf(sn.t) >= 0 ? sn.i : null); }); });
+  }
+  function askCheckOff(t, openRows) {
+    var n = openRows.length, what = openRows.every(function (c) { return c.email; }) ? 'email' : 'task';
+    var s = sheet('<h3>Check off “' + esc(t.title) + '”?</h3>' +
+      '<p class="ask">' + n + ' grouped ' + what + (n > 1 ? 's are' : ' is') + ' still open. Check ' + (n > 1 ? 'them' : 'it') + ' off too?</p>' +
+      '<p class="menu-note">If you choose No, ' + (n > 1 ? 'they go back to being their own cards' : 'it goes back to being its own card') + ' in this list.</p>' +
+      '<div class="sheet-actions"><button type="button" class="btn" data-act="close">Cancel</button><div class="right">' +
+      '<button type="button" class="btn" data-act="no">No, just this one</button><button type="button" class="btn primary" data-act="yes">Yes, check all</button></div></div>');
+    s.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.act === 'close') closeSheet();
+      else if (b.dataset.act === 'yes') { closeSheet(true); finishTask(t, openRows, []); }
+      else if (b.dataset.act === 'no') { closeSheet(true); finishTask(t, [], openRows); }
+    });
+  }
+  // Put a task under an umbrella (moving it to the umbrella's list if needed)
+  function canGroup(t, u) { return !!(t && u && t !== u && !u.parent && !u.done && !t.done && !kidsOf(t).length); }
+  function groupUnder(t, u) {
+    if (!canGroup(t, u) || t.parent === u.id) return render();
+    var before = fields(t), index = state.tasks.indexOf(t);
+    state.tasks.splice(index, 1);
+    t.listId = u.listId; t.parent = u.id; markRow(t);
+    var kids = kidsOf(u), after = kids.length ? kids[kids.length - 1] : u;
+    state.tasks.splice(state.tasks.indexOf(after) + 1, 0, t);
     commit(t, before);
     save(); render();
-    toast(t.done ? 'Checked off “' + t.title + '”' : 'Moved back to the list', function () { undoTo(t, before); });
+    toast('Grouped under “' + u.title + '”', function () { undoTo(t, before, index); });
+  }
+  function ungroup(t, quiet) {
+    var p = parentOf(t); if (!p) return;
+    var before = fields(t), index = state.tasks.indexOf(t);
+    state.tasks.splice(index, 1);
+    t.parent = null;
+    state.tasks.splice(state.tasks.indexOf(p) + 1, 0, t);
+    commit(t, before, true);
+    if (quiet) return;
+    save(); render();
+    toast('Taken out of “' + p.title + '”', function () { undoTo(t, before, index); });
   }
   function cycle(t) {
+    markRow(t);
     var before = fields(t), order = [null, 'high', 'med', 'low'];
     t.priority = order[(order.indexOf(t.priority) + 1) % order.length];
     commit(t, before);
@@ -674,6 +812,13 @@
     var act = actEl && actEl.dataset.act;
     if (act === 'signin') { store('tb-silent-at', null); return signIn(false); }
     if (act === 'retry') { phase = 'loading'; render(); return refresh(); }
+    var row = e.target.closest('.grow'), rt = row && taskById(row.dataset.row);
+    if (rt) {
+      if (act === 'toggle-row') return toggleTask(rt);
+      if (act === 'email') return;
+      return openTaskSheet(rt);
+    }
+    if (act === 'group' && t) { if (openGroups[t.id]) delete openGroups[t.id]; else openGroups[t.id] = true; store('tb-open-groups', openGroups); return render(); }
     if (act === 'toggle' && t) return toggleTask(t);
     if (act === 'cycle' && t) return cycle(t);
     if (act === 'email') return;
@@ -710,6 +855,7 @@
   });
   board.addEventListener('keydown', function (e) {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('card')) { e.preventDefault(); var t = taskById(e.target.dataset.id); if (t) openTaskSheet(t); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('grow')) { e.preventDefault(); var r = taskById(e.target.dataset.row); if (r) openTaskSheet(r); }
   });
 
   document.getElementById('menuBtn').onclick = openMenu;
@@ -747,7 +893,20 @@
     return IOS && id ? 'https://mail.google.com/mail/mu/mp/#cv/priority/%5Esmartlabel_personal/' + encodeURIComponent(id) : t.email.link;
   }
   function openTaskSheet(t) {
-    var base = fields(t);
+    markRow(t);
+    var base = fields(t), up = parentOf(t), hasKids = kidsOf(t).length > 0;
+    // Group under: any open card in any list (one level only, so not a task that's already grouped)
+    var groupPick = '';
+    if (!up && !hasKids && !t.done) {
+      groupPick = state.lists.map(function (l) {
+        var opts = openTasks(l.id).filter(function (u) { return u !== t; }).map(function (u) { return '<option value="' + u.id + '">' + esc(u.title || 'Untitled task') + '</option>'; }).join('');
+        return opts ? '<optgroup label="' + esc(l.title) + '">' + opts + '</optgroup>' : '';
+      }).join('');
+      groupPick = groupPick ? '<div class="field"><label for="t-group">Group under</label><select id="t-group"><option value="">Not grouped</option>' + groupPick + '</select></div>' : '';
+    }
+    var groupBox = up ? '<div class="group-box"><div class="who"><div class="from">Grouped in</div><div class="subj">' + esc(up.title) + '</div></div><button type="button" class="btn" data-act="ungroup">Remove from group</button></div>' : '';
+    var stepsBox = up ? '' : '<div class="field steps"><span class="lbl">Steps <span class="steps-count"></span></span><div class="step-list"></div>' +
+      '<div class="step-add"><input id="t-step" placeholder="Add a step" enterkeyhint="done" autocomplete="off"><button type="button" class="btn" data-act="add-step">' + ICON.plus + 'Add</button></div></div>';
     var lists = state.lists.map(function (l) { return '<option value="' + l.id + '"' + (l.id === t.listId ? ' selected' : '') + '>' + esc(l.title) + '</option>'; }).join('');
     var pri = [['', 'None'], ['high', 'High'], ['med', 'Medium'], ['low', 'Low']].map(function (p) {
       return '<button type="button" class="' + p[0] + '" data-pri="' + p[0] + '" aria-pressed="' + ((t.priority || '') === p[0]) + '">' + p[1] + '</button>';
@@ -759,7 +918,9 @@
         (t.web ? '<a class="btn" href="' + esc(t.web) + '" target="_blank" rel="noopener">' + ICON.ext + 'Open Google Task</a>' : '') + '</div></div>' : '') +
       '<div class="field"><span class="lbl">Priority</span><div class="seg">' + pri + '</div></div>' +
       '<div class="two"><div class="field"><label for="t-due">Due date</label><input id="t-due" type="date" value="' + esc(t.due) + '"></div>' +
-      '<div class="field"><label for="t-list">List</label><select id="t-list">' + lists + '</select></div></div>' +
+      (up ? '<div class="field"><span class="lbl">List</span><div class="ro">' + esc((listById(t.listId) || {}).title || '') + ', with its group</div></div></div>' :
+        '<div class="field"><label for="t-list">List</label><select id="t-list">' + lists + '</select></div></div>') +
+      groupBox + groupPick + stepsBox +
       '<div class="field"><label for="t-notes">Notes</label><textarea id="t-notes" placeholder="Add details">' + esc(t.notes) + '</textarea></div>' +
       (t.web ? '<a class="gt-link" href="' + esc(t.web) + '" target="_blank" rel="noopener">Open in Google Tasks</a>' : '') +
       '<div class="confirm-slot"></div>' +
@@ -773,10 +934,35 @@
     s.querySelector('#t-title').addEventListener('input', function (e) { t.title = e.target.value || 'Untitled task'; });
     s.querySelector('#t-due').addEventListener('change', function (e) { t.due = e.target.value; });
     s.querySelector('#t-notes').addEventListener('input', function (e) { t.notes = e.target.value; });
-    s.querySelector('#t-list').addEventListener('change', function (e) {
+    var listSel = s.querySelector('#t-list');
+    if (listSel) listSel.addEventListener('change', function (e) {
       state.tasks.splice(state.tasks.indexOf(t), 1);
       t.listId = e.target.value; state.tasks.push(t);
     });
+    var gSel = s.querySelector('#t-group');
+    if (gSel) gSel.addEventListener('change', function () { var u = taskById(gSel.value); if (!u) return; closeSheet(); groupUnder(t, u); });
+    // Steps: plain checkboxes, sent to Google as soon as they change
+    function drawSteps() {
+      var box = s.querySelector('.step-list'); if (!box) return;
+      var steps = stepsOf(t);
+      s.querySelector('.steps-count').textContent = steps.length ? '(' + steps.filter(function (c) { return c.done; }).length + '/' + steps.length + ')' : '';
+      box.innerHTML = steps.map(function (c) {
+        return '<div class="step' + (c.done ? ' done' : '') + '" data-step="' + c.id + '"><button type="button" class="check" data-act="step-toggle" aria-label="' + (c.done ? 'Mark not done' : 'Mark done') + '">' + ICON.check + '</button>' +
+          '<span class="step-title">' + esc(c.title) + '</span><button type="button" class="icon-btn" data-act="step-del" aria-label="Delete step">' + ICON.x + '</button></div>';
+      }).join('');
+    }
+    function addStep() {
+      var inp = s.querySelector('#t-step'), title = inp.value.trim();
+      if (!title) { inp.focus(); return; }
+      var st = { id: '', listId: t.listId, title: title, priority: null, due: '', notes: '', done: false, email: null, parent: t.id, pos: '', web: '' };
+      var kids = kidsOf(t), after = kids.length ? kids[kids.length - 1] : t;
+      state.tasks.splice(state.tasks.indexOf(after) + 1, 0, st);
+      insertTask(st); save(); render();
+      inp.value = ''; inp.focus(); drawSteps();
+    }
+    drawSteps();
+    var stepIn = s.querySelector('#t-step');
+    if (stepIn) stepIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addStep(); } });
     s.addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b) return;
       if (b.dataset.pri !== undefined) {
@@ -784,15 +970,27 @@
         s.querySelectorAll('[data-pri]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
       } else if (b.dataset.act === 'close') closeSheet();
       else if (b.dataset.act === 'toggle') { closeSheet(); toggleTask(t); }
+      else if (b.dataset.act === 'ungroup') { closeSheet(); ungroup(t); }
+      else if (b.dataset.act === 'add-step') addStep();
+      else if (b.dataset.act === 'step-toggle' || b.dataset.act === 'step-del') {
+        var st = taskById(b.closest('.step').dataset.step); if (!st) return;
+        if (b.dataset.act === 'step-toggle') { var sb = fields(st); st.done = !st.done; commit(st, sb); }
+        else { state.tasks.splice(state.tasks.indexOf(st), 1); enqueue({ m: 'DELETE', u: '/lists/' + st.listId + '/tasks/' + st.id, what: 'deleting the step “' + st.title + '”' }); }
+        save(); render(); drawSteps();
+      }
       else if (b.dataset.act === 'delete') {
-        s.querySelector('.confirm-slot').innerHTML = '<div class="confirm">Delete this task?<span style="flex:1"></span><button type="button" class="btn danger" data-act="really-delete">Delete</button><button type="button" class="btn" data-act="keep">Keep it</button></div>';
+        var nRows = rowsOf(t).length, nSteps = stepsOf(t).length;
+        s.querySelector('.confirm-slot').innerHTML = nRows ?
+          '<div class="confirm">Delete this task? ' + nRows + ' task' + (nRows > 1 ? 's are' : ' is') + ' grouped under it' + (nSteps ? ', and its steps go too' : '') + '.<span style="flex:1"></span>' +
+            '<button type="button" class="btn danger" data-act="really-delete">Delete all</button><button type="button" class="btn" data-act="delete-keep">Delete, keep grouped tasks</button><button type="button" class="btn" data-act="keep">Cancel</button></div>' :
+          '<div class="confirm">Delete this task' + (nSteps ? ' and its steps' : '') + '?<span style="flex:1"></span><button type="button" class="btn danger" data-act="really-delete">Delete</button><button type="button" class="btn" data-act="keep">Keep it</button></div>';
       } else if (b.dataset.act === 'keep') s.querySelector('.confirm-slot').innerHTML = '';
-      else if (b.dataset.act === 'really-delete') {
+      else if (b.dataset.act === 'really-delete' || b.dataset.act === 'delete-keep') {
         // Put back any unsaved edits first, so Undo brings back the task as it was
         Object.assign(t, { title: base.title, notes: base.notes, priority: base.priority, due: base.due, done: base.done });
         if (t.listId !== base.listId) { state.tasks.splice(state.tasks.indexOf(t), 1); t.listId = base.listId; state.tasks.push(t); }
         closeSheet(true);
-        deleteTask(t);
+        deleteTask(t, b.dataset.act === 'delete-keep');
       }
     });
     if (window.matchMedia('(hover: hover)').matches) s.querySelector('#t-title').focus();
@@ -929,10 +1127,12 @@
       if (e.pointerType !== 'mouse') press.timer = setTimeout(function () { if (press) startDrag(press.x, press.y); }, 300);
       return;
     }
-    var card = e.target.closest('.card');
+    // A grouped task's row can be dragged out of its umbrella
+    var row = e.target.closest('.grow');
+    var card = row || e.target.closest('.card');
     if (!card || card.classList.contains('done') || e.button > 0) return;
     if (e.target.closest('button, input, a, textarea, select')) return;
-    press = { id: card.dataset.id, card: card, x: e.clientX, y: e.clientY, type: e.pointerType, timer: null };
+    press = { id: row ? row.dataset.row : card.dataset.id, row: !!row, card: card, x: e.clientX, y: e.clientY, type: e.pointerType, timer: null };
     if (e.pointerType !== 'mouse') press.timer = setTimeout(function () { if (press) startDrag(press.x, press.y); }, 300);
   });
   window.addEventListener('pointermove', function (e) {
@@ -1013,11 +1213,13 @@
     ghost.style.left = r.left + 'px'; ghost.style.top = r.top + 'px';
     var ph = document.createElement('div'); ph.className = 'placeholder'; ph.style.height = r.height + 'px';
     ph.style.setProperty('--lc', getComputedStyle(zone).getPropertyValue('--lc'));
-    if (!zone.hasAttribute('data-noph')) card.parentNode.insertBefore(ph, card);
+    if (press.row) ghost.classList.add('card', 'row-ghost');
+    else if (!zone.hasAttribute('data-noph')) card.parentNode.insertBefore(ph, card);
     card.classList.add('src-hidden');
     document.body.appendChild(ghost);
     document.body.classList.add('is-dragging');
-    drag = { id: press.id, ghost: ghost, ph: ph, offX: x - r.left, offY: y - r.top, from: zone.dataset.zone, zone: zone, srcZone: zone };
+    // A row starts out "staying" in its umbrella until it is dragged somewhere else
+    drag = { id: press.id, row: press.row, stay: press.row, ghost: ghost, ph: ph, offX: x - r.left, offY: y - r.top, from: zone.dataset.zone, zone: zone, srcZone: zone };
     lastX = x; lastY = y;
     press = null;
     if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
@@ -1035,10 +1237,26 @@
     var out = !zone && state.view === 'priority';
     drag.ghost.style.opacity = out ? '.55' : '';
     if (out) { if (drag.ph.parentNode) drag.ph.remove(); setTarget(null); }
-    if (!zone || zone.dataset.zone === 'nodrop') return;
+    if (!zone || zone.dataset.zone === 'nodrop') { setGroupTarget(null); return; }
     setTarget(zone);
     // Small calendar boxes light up instead of making room, so nothing shifts under your finger
     if (zone.hasAttribute('data-noph')) { if (drag.ph.parentNode) drag.ph.remove(); return; }
+    // Lists view: holding a card over the middle of another card groups it there
+    if (state.view === 'lists') {
+      var over = el && el.closest('.cards > .card:not(.src-hidden)'), me = taskById(drag.id), ot = over && taskById(over.dataset.id);
+      // A row held over its own umbrella stays where it is
+      if (drag.row && ot && me && me.parent === ot.id) { drag.stay = true; if (drag.ph.parentNode) drag.ph.remove(); setGroupTarget(null); setTarget(null); return; }
+      drag.stay = false;
+      if (ot && canGroup(me, ot)) {
+        var orc = over.getBoundingClientRect(), band = Math.min(orc.height * 0.3, 40);
+        if (lastY > orc.top + band && lastY < orc.bottom - band) {
+          if (drag.gt !== over) { setGroupTarget(null); drag.gt = over; drag.gtAt = Date.now(); }
+          if (Date.now() - drag.gtAt > 350) { setGroupTarget(over); if (drag.ph.parentNode) drag.ph.remove(); }
+          return;
+        }
+      }
+      setGroupTarget(null);
+    }
     var list = zone.querySelector('.cards');
     if (!list) return;
     var cards = Array.prototype.filter.call(list.children, function (c) { return c.classList.contains('card') && !c.classList.contains('src-hidden'); });
@@ -1052,6 +1270,14 @@
       drag.ph.style.setProperty('--lc', getComputedStyle(zone).getPropertyValue('--lc'));
     }
   }
+  function setGroupTarget(c) {
+    if (!drag) return;
+    if (!c) { drag.gt = null; drag.gtAt = 0; }
+    var was = drag.group ? board.querySelector('.group-target') : null;
+    if (was && was !== c) was.classList.remove('group-target');
+    drag.group = c ? c.dataset.id : null;
+    if (c) c.classList.add('group-target');
+  }
   function setTarget(z) {
     if (drag.zone === z) return;
     if (drag.zone) drag.zone.classList.remove('drop-target');
@@ -1060,6 +1286,8 @@
   }
   function autoScroll() {
     if (!drag) return;
+    // Holding still over a card: once held long enough, it becomes the group target
+    if (drag.gt && !drag.group && Date.now() - drag.gtAt > 350) moveDrag();
     // Computers: a list scrolls on its own, so scroll the one under the card when it nears that list's top or bottom
     if (!drag.list && state.view !== 'calendar' && window.innerWidth > 600) {
       var under = document.elementFromPoint(lastX, lastY), col = under && under.closest('.board .column');
@@ -1142,7 +1370,8 @@
     var l = listById(t.listId);
     hideTip();
     tipEl = document.createElement('div'); tipEl.className = 'tip'; tipEl.setAttribute('role', 'tooltip');
-    tipEl.innerHTML = esc(t.title) + '<span class="sub">' + [t.due ? 'Due ' + dueInfo(t.due).label : '', t.priority ? PRI[t.priority] + ' priority' : '', l ? l.title : ''].filter(Boolean).map(esc).join(' &middot; ') + '</span>';
+    var up = parentOf(t);
+    tipEl.innerHTML = esc(t.title) + '<span class="sub">' + [t.due ? 'Due ' + dueInfo(t.due).label : '', t.priority ? PRI[t.priority] + ' priority' : '', l ? l.title : '', up ? 'in “' + up.title + '”' : ''].filter(Boolean).map(esc).join(' &middot; ') + '</span>';
     document.getElementById('layer').appendChild(tipEl);
     // Place it beside the day (right side first, then left, then above), never on the day or the day pop-up
     var r = m.getBoundingClientRect(), tr = tipEl.getBoundingClientRect();
@@ -1169,9 +1398,11 @@
     document.body.classList.remove('is-dragging');
     d.ghost.remove();
     suppressClick = true; setTimeout(function () { suppressClick = false; }, 60);
+    var t = taskById(d.id);
+    if (commitIt && t && d.group) return groupUnder(t, taskById(d.group));
+    if (d.row && (d.stay || !d.ph.parentNode)) { render(); return; }
     var zone = d.ph.parentNode ? d.ph.closest('[data-zone]') : d.zone;
     var key = zone ? zone.dataset.zone : state.view === 'priority' ? 'pri:none' : null;
-    var t = taskById(d.id);
     if (!commitIt || !key || !t) { render(); return; }
     var kind = key.split(':')[0], val = key.slice(kind.length + 1);
     if (kind === 'list') val = realId(val);
@@ -1181,8 +1412,11 @@
     // Keep the drop position in the shared task order, so it carries across views
     state.tasks.splice(index, 1);
     if (kind === 'list') {
+      var up = parentOf(t);
       if (t.listId !== val) msg = 'Moved to ' + listById(val).title;
-      t.listId = val;
+      else if (up) msg = 'Taken out of “' + up.title + '”';
+      // Dropped on a list: it's its own card now
+      t.listId = val; t.parent = null;
     } else if (kind === 'pri') {
       var p = val === 'none' ? null : val;
       if (t.priority !== p) msg = p ? 'Priority set to ' + PRI[p] : 'Priority cleared';

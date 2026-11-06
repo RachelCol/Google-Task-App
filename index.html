@@ -311,6 +311,46 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .menu-note { margin: 0; font-size: 13.5px; color: var(--muted); }
 a.btn { text-decoration: none; color: inherit; }
 a.gt-link { font-size: 13.5px; color: var(--accent); align-self: flex-start; }
+/* Grouped tasks on an umbrella card, steps, and the group drop target */
+.group { grid-column: 1 / -1; margin: 2px -4px -2px; }
+.group-toggle { border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; padding: 4px; display: flex; align-items: center; gap: 4px; text-align: left; width: 100%; border-radius: 6px; }
+.group-toggle:hover { color: var(--fg); }
+.group-toggle svg { width: 14px; height: 14px; flex: none; transition: transform .15s; }
+.group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.group-rows { display: flex; flex-direction: column; gap: 4px; padding: 2px 0 2px 8px; border-left: 2px solid var(--line); margin-left: 10px; }
+.grow { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 6px 11px; cursor: grab; overflow: hidden; font-size: 14px; }
+.grow::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; }
+.grow[data-p="high"]::before { background: var(--p-high); } .grow[data-p="med"]::before { background: var(--p-med); } .grow[data-p="low"]::before { background: var(--p-low); }
+.grow:hover { border-color: var(--muted); }
+.grow .check { width: 18px; height: 18px; }
+.grow .gtitle { overflow-wrap: anywhere; }
+.gmeta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; font-size: 12px; color: var(--muted); }
+.gmeta .chip { font-size: 11.5px; padding: 0 7px; }
+.gmeta .email { padding: 1px 5px; }
+.grow.done .check, .step.done .check { background: var(--p-low); border-color: var(--p-low); color: var(--card); }
+.grow.done .check svg, .step.done .check svg { opacity: 1; }
+.grow.done .gtitle, .step.done .step-title { text-decoration: line-through; color: var(--muted); }
+.row-ghost { background: var(--card); border-radius: 8px; padding: 6px 8px 6px 11px; font-size: 14px; }
+.row-ghost .gmeta { grid-column: 2; }
+.card.group-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.card.group-target::after { content: "Drop to group here"; position: absolute; right: 8px; bottom: 6px; font-size: 12px; font-weight: 600; color: var(--accent-fg); background: var(--accent); border-radius: 99px; padding: 2px 8px; }
+.steps-mark, .in-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.steps-mark svg { width: 12px; height: 12px; }
+.in-tag { font-style: italic; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-list { display: flex; flex-direction: column; gap: 2px; }
+.step { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.step .step-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.step .icon-btn { margin-left: 0; width: 28px; height: 28px; }
+.step .icon-btn svg { width: 16px; height: 16px; }
+.step-add { display: flex; gap: 8px; }
+.step-add input { flex: 1; min-width: 0; }
+.step-add .btn svg { width: 14px; height: 14px; }
+.group-box { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.group-box .who { flex: 1 1 160px; min-width: 0; }
+.group-box .from { font-size: 13px; color: var(--muted); }
+.group-box .subj { font-weight: 600; overflow-wrap: anywhere; }
+.ro { padding: 9px 0; color: var(--muted); font-size: 14px; }
+.ask { margin: 0 0 6px; font-size: 15px; }
 </style>
 <style>
 body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
@@ -337,6 +377,6 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
 <main class="board" id="board" aria-label="Tasks"></main>
 <div id="layer"></div>
 
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>
