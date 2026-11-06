@@ -5,7 +5,7 @@
 (function () {
   // The OAuth Client ID from Google Cloud (APIs & Services > Credentials). It is not a secret.
   // Shown in the menu, so it's easy to tell whether a phone has the latest update
-  var VERSION = '14';
+  var VERSION = '15';
   var CLIENT_ID = '781490508547-lg8vamkljt03bjnho0up53u4ma08mo75.apps.googleusercontent.com';
   var APP_URL = 'https://rachelcol.github.io/Google-Task-App/';
   var SCOPES = 'https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/drive.appdata';
@@ -905,6 +905,7 @@
       groupPick = groupPick ? '<div class="field"><label for="t-group">Group under</label><select id="t-group"><option value="">Not grouped</option>' + groupPick + '</select></div>' : '';
     }
     var groupBox = up ? '<div class="group-box"><div class="who"><div class="from">Grouped in</div><div class="subj">' + esc(up.title) + '</div></div><button type="button" class="btn" data-act="ungroup">Remove from group</button></div>' : '';
+    var rowsBox = up || !rowsOf(t).length ? '' : '<div class="field"><span class="lbl">Grouped tasks</span><div class="sheet-rows"></div></div>';
     var stepsBox = up ? '' : '<div class="field steps"><span class="lbl">Steps <span class="steps-count"></span></span><div class="step-list"></div>' +
       '<div class="step-add"><input id="t-step" placeholder="Add a step" enterkeyhint="done" autocomplete="off"><button type="button" class="btn" data-act="add-step">' + ICON.plus + 'Add</button></div></div>';
     var lists = state.lists.map(function (l) { return '<option value="' + l.id + '"' + (l.id === t.listId ? ' selected' : '') + '>' + esc(l.title) + '</option>'; }).join('');
@@ -920,7 +921,7 @@
       '<div class="two"><div class="field"><label for="t-due">Due date</label><input id="t-due" type="date" value="' + esc(t.due) + '"></div>' +
       (up ? '<div class="field"><span class="lbl">List</span><div class="ro">' + esc((listById(t.listId) || {}).title || '') + ', with its group</div></div></div>' :
         '<div class="field"><label for="t-list">List</label><select id="t-list">' + lists + '</select></div></div>') +
-      groupBox + groupPick + stepsBox +
+      groupBox + groupPick + rowsBox + stepsBox +
       '<div class="field"><label for="t-notes">Notes</label><textarea id="t-notes" placeholder="Add details">' + esc(t.notes) + '</textarea></div>' +
       (t.web ? '<a class="gt-link" href="' + esc(t.web) + '" target="_blank" rel="noopener">Open in Google Tasks</a>' : '') +
       '<div class="confirm-slot"></div>' +
@@ -961,6 +962,22 @@
       inp.value = ''; inp.focus(); drawSteps();
     }
     drawSteps();
+    // The umbrella's grouped tasks: tap one to open it, tick to check it off
+    function drawRows() {
+      var box = s.querySelector('.sheet-rows'); if (!box) return;
+      var rows = rowsOf(t), open = byPriorityThenDue(rows.filter(function (c) { return !c.done; }));
+      box.innerHTML = open.concat(rows.filter(function (c) { return c.done; })).map(rowHTML).join('') || '<p class="menu-note">Nothing grouped here anymore.</p>';
+    }
+    drawRows();
+    var rowsEl = s.querySelector('.sheet-rows');
+    if (rowsEl) rowsEl.addEventListener('click', function (e) {
+      var r = e.target.closest('.grow'), rt = r && taskById(r.dataset.row); if (!rt) return;
+      var a = e.target.closest('[data-act]');
+      if (a && a.dataset.act === 'email') return;
+      e.stopPropagation();
+      if (a && a.dataset.act === 'toggle-row') { toggleTask(rt); drawRows(); return; }
+      openTaskSheet(rt);
+    });
     var stepIn = s.querySelector('#t-step');
     if (stepIn) stepIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addStep(); } });
     s.addEventListener('click', function (e) {

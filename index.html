@@ -349,6 +349,8 @@ a.gt-link { font-size: 13.5px; color: var(--accent); align-self: flex-start; }
 .group-box .who { flex: 1 1 160px; min-width: 0; }
 .group-box .from { font-size: 13px; color: var(--muted); }
 .group-box .subj { font-weight: 600; overflow-wrap: anywhere; }
+.sheet-rows { display: flex; flex-direction: column; gap: 6px; }
+.sheet-rows .grow { cursor: pointer; }
 .ro { padding: 9px 0; color: var(--muted); font-size: 14px; }
 .ask { margin: 0 0 6px; font-size: 15px; }
 </style>
@@ -377,6 +379,6 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
 <main class="board" id="board" aria-label="Tasks"></main>
 <div id="layer"></div>
 
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
